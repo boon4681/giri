@@ -6,7 +6,6 @@ import type { GiriConfig } from '../types';
 import { writeManifest } from './manifest';
 import { writeOpenApi } from './openapi';
 import { extractRouteMeta } from './route-meta';
-import { createSchemaProgram, extractRouteResponses } from './schema';
 import { syncProject, type SyncResult } from './sync';
 import { slash } from './util';
 
@@ -40,6 +39,7 @@ export function createWatchUpdater(
     const reextractRoute = async (route: ScannedRoute): Promise<void> => {
         const key = route.file;
         try {
+            const { createSchemaProgram, extractRouteResponses } = await import('./schema/index.js');
             const appTypes = join(paths.outDir, 'types', 'app.d.ts');
             const program = createSchemaProgram(paths, existsSync(appTypes) ? [key, appTypes] : [key]);
             data.responsesByFile.set(key, extractRouteResponses(program, key));

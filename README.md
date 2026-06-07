@@ -19,7 +19,7 @@ Because I can, and I am too lazy to write an OpenAPI spec. Write handlers, retur
 yarn add @boon4681/giri hono @hono/node-server zod
 ```
 
-`hono`, `@hono/node-server`, `zod`, `valibot`, and `typescript` are optional peers — install
+`hono`, `@hono/node-server`, `zod`, `valibot`, and `typescript` are optional peers - install
 only what you use.
 
 ## Quick start
@@ -38,7 +38,7 @@ curl http://localhost:3000/
 
 ## Config
 
-`giri.config.ts` is declarative — it is loaded at build time, so keep it cheap and free of
+`giri.config.ts` is declarative - it is loaded at build time, so keep it cheap and free of
 side effects (no DB drivers here; see [Lifecycle](#lifecycle)).
 
 ```ts
@@ -73,7 +73,7 @@ src/routes/
 ```
 
 - `[id]` folder becomes the param `:id`; params nest down the path.
-- Files without a `+` prefix are not routes — colocate helpers freely.
+- Files without a `+` prefix are not routes - colocate helpers freely.
 
 A verb file has one shape: the `handle` named export is the handler. Everything else is an
 optional named export, so the trivial case is one line and complexity is additive.
@@ -95,12 +95,12 @@ export const handle: Handle = (c) => {
 
 Giri owns `c`, so the return type is the schema on every backend:
 
-- `c.json(data, status?)` / `c.text(text, status?)` — return value carries the status in its type.
-- `c.params` — typed from the folder path.
-- `c.req.valid("body" | "query")` — parsed, typed input (see below).
+- `c.json(data, status?)` / `c.text(text, status?)` - return value carries the status in its type.
+- `c.params` - typed from the folder path.
+- `c.req.valid("body" | "query")` - parsed, typed input (see below).
 - `c.req.header(name)`, `c.req.url`, etc.
-- `c.get(key)` / `c.set(key, value)` — per-request vars from middleware.
-- `c.app` — app-wide services from `src/main.ts` `init()` (see [Lifecycle](#lifecycle)).
+- `c.get(key)` / `c.set(key, value)` - per-request vars from middleware.
+- `c.app` - app-wide services from `src/main.ts` `init()` (see [Lifecycle](#lifecycle)).
 
 ## Inputs
 
@@ -132,8 +132,8 @@ runtime. An unwrapped schema is rejected at build time.
 
 Middleware use giri's `(c, next)` shape and live in two places:
 
-- **Broad:** `export const middleware` in a folder's `+shared.ts` — applies to the whole subtree.
-- **Precise:** `export const middleware` in a verb file — applies to that one verb.
+- **Broad:** `export const middleware` in a folder's `+shared.ts` - applies to the whole subtree.
+- **Precise:** `export const middleware` in a verb file - applies to that one verb.
 
 Use `stack(...)` instead of a plain array so injected vars keep their types and propagate to
 downstream handlers. Run order: inherited `+shared.ts` (root to leaf), then the verb's
@@ -153,7 +153,7 @@ export const middleware = stack(requestId);
 // every handler below now sees c.get("requestId"): string
 ```
 
-Tag a middleware with `defineMiddleware` to feed OpenAPI security automatically — a route that
+Tag a middleware with `defineMiddleware` to feed OpenAPI security automatically - a route that
 uses it shows the scheme, a public route does not.
 
 ```ts
@@ -179,7 +179,7 @@ or a `+shared.ts`). Hidden routes still serve normally.
 
 ## Lifecycle
 
-`src/main.ts` is the optional home for imperative startup — opening pools, validating env,
+`src/main.ts` is the optional home for imperative startup - opening pools, validating env,
 graceful shutdown. Giri owns the serve and calls these hooks; the adapter still binds the port.
 
 ```ts
@@ -187,7 +187,7 @@ graceful shutdown. Giri owns the serve and calls these hooks; the adapter still 
 import type { Services } from "@boon4681/giri";
 
 export const init = () => {
-    // leave init unannotated — its return type is the source of truth for c.app
+    // leave init unannotated - its return type is the source of truth for c.app
     return { db: connectDb(process.env.DATABASE_URL) };
 };
 
@@ -198,7 +198,7 @@ export const teardown = (services: Services) => {
 
 Flow: load `main.ts` -> `await init()` -> hold services -> adapter serves -> `teardown` on
 exit. `init` runs once and is not re-run on watch rebuilds. The returned object reaches every
-handler as a typed `c.app`, inferred from `init`'s return — no declaration needed.
+handler as a typed `c.app`, inferred from `init`'s return - no declaration needed.
 
 ## CLI
 
@@ -207,14 +207,14 @@ handler as a typed `c.app`, inferred from `init`'s return — no declaration nee
 | `giri init`  | Scaffold `giri.config.ts`, a starter route, tsconfig paths, and `.gitignore`.      |
 | `giri sync`  | Scan `src/routes` and regenerate `.giri/` (manifest, param types, `openapi.json`). |
 | `giri serve` | `sync`, run `init()`, then serve via the adapter. Watches `src/` and re-syncs.     |
-| `giri build` | Planned — currently a no-op.                                                       |
+| `giri build` | Planned - currently a no-op.                                                       |
 
 `giri serve` flags: `--port <n>`, `--host <addr>`, `--no-watch`.
 
 ## Generated output (`.giri/`)
 
 Everything derived lives in `.giri/` at the project root: param `.d.ts` per route, the route
-manifest, and the assembled `openapi.json`. It is gitignored and rebuilt on demand — never edit
+manifest, and the assembled `openapi.json`. It is gitignored and rebuilt on demand - never edit
 it, only import from it.
 
 ## Example

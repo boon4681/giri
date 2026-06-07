@@ -5,6 +5,7 @@ export type StatusCode = number;
 export type ResponseFormat = 'json' | 'text';
 
 export const typedResponseBrand: unique symbol = Symbol.for('giri.typed-response') as never;
+export const nativeContextBrand: unique symbol = Symbol.for('giri.native-context') as never;
 
 export interface TypedResponse<
     T,
@@ -141,9 +142,15 @@ export type MergeStack<T> = T extends readonly [infer Head, ...infer Rest]
     : {};
 
 /**
- * Merge the vars from a middleware stack export. A plain `Middleware[]` (not a `stack(...)` tuple)
+ * Merge the injected vars of a `middleware` export. A `stack(...)` tuple is merged element-wise;
+ * a single bare middleware (`export const middleware = fromHono(...)`) contributes its own vars; a
+ * plain `Middleware[]` (not a `stack(...)` tuple) contributes nothing - its element types are lost.
  */
-export type InferStackVars<T> = T extends readonly [unknown, ...unknown[]] ? MergeStack<T> : {};
+export type InferStackVars<T> = T extends readonly [unknown, ...unknown[]]
+    ? MergeStack<T>
+    : T extends Middleware<Record<string, string>, ValidatedInput, any>
+        ? VarsOf<T>
+        : {};
 
 /**
  * The vars injected by a module own `middleware` export (a `stack(...)`). Used by the

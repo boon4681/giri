@@ -17,7 +17,7 @@ import { writeOpenApi } from './openapi';
 import { writeParamTypes, type TypeFolder } from './param-types';
 import { extractRouteMeta, type RouteSecurity } from './route-meta';
 import { writeRouteTypes } from './route-types';
-import { createSchemaProgram, extractRouteResponses, type RouteResponses } from './schema';
+import type { RouteResponses } from './schema';
 import { writeTsConfig } from './tsconfig';
 import { assertSafeOutDir, pruneDir, slash, typeFilePath } from './util';
 
@@ -63,13 +63,14 @@ export interface SyncResult {
  * broken project (or missing TypeScript) must not break `sync`, so failures yield an
  * empty map and the manifest simply omits `responses`.
  */
-function extractResponses(paths: GiriPaths, routes: ScannedRoute[]): Map<string, RouteResponses> {
+async function extractResponses(paths: GiriPaths, routes: ScannedRoute[]): Promise<Map<string, RouteResponses>> {
     const byFile = new Map<string, RouteResponses>();
     if (routes.length === 0) {
         return byFile;
     }
 
     try {
+        const { createSchemaProgram, extractRouteResponses } = await import('./schema/index.js');
         const files = [...new Set(routes.map((route) => route.file))];
         // Include the generated global app.d.ts so `c.app` resolves to its real type.
         const appTypes = join(paths.outDir, 'types', 'app.d.ts');
@@ -148,7 +149,7 @@ export async function syncProject<App>(
     await writeTsConfig(paths, config);
 
     // Response schemas need the generated tsconfig + $types to resolve, so extract last.
-    const responsesByFile = extractResponses(paths, routes);
+    const responsesByFile = await extractResponses(paths, routes);
     const { inputsByFile, securityByFile, hiddenFiles } = await extractMeta(config, paths, routes);
     const data: SyncData = { responsesByFile, inputsByFile, securityByFile, hiddenFiles };
     await writeManifest(paths, routes, data);

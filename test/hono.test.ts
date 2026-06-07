@@ -1,7 +1,8 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { MiddlewareHandler } from 'hono';
 import { buildGiriApp, defineConfig } from '../src';
-import { hono } from '../src/adapters/hono';
+import { fromHono, hono } from '../src/adapters/hono';
 
 const tmp = join(process.cwd(), 'test', '.tmp', 'hono');
 
@@ -278,5 +279,49 @@ describe('hono adapter', () => {
 
         expect(response.status).toBe(200);
         await expect(response.json()).resolves.toEqual({ status: 'aliased' });
+    });
+
+    it('bridges a native Hono middleware via fromHono (var injection + early return)', async () => {
+        const adapter = hono();
+        const app = adapter.createApp();
+
+        // A real Hono middleware: redirect before the handler when ?deny=1, otherwise inject a var.
+        const googleAuthLike: MiddlewareHandler = async (c, next) => {
+            if (c.req.query('deny') === '1') {
+                return c.redirect('https://login.example/start', 302);
+            }
+            c.set('user-google', { email: 'ada@giri.test' });
+            await next();
+        };
+
+        adapter.register(app, {
+            method: 'GET',
+            path: '/me',
+            middleware: [fromHono(googleAuthLike)],
+            // The downstream giri handler reads the var the Hono middleware set, via c.get.
+            handle: (c) => c.json({ user: c.get('user-google') }),
+        });
+
+        const ok = await adapter.fetch(app, new Request('http://giri.test/me'));
+        expect(ok.status).toBe(200);
+        await expect(ok.json()).resolves.toEqual({ user: { email: 'ada@giri.test' } });
+
+        const redirected = await adapter.fetch(app, new Request('http://giri.test/me?deny=1'));
+        expect(redirected.status).toBe(302);
+        expect(redirected.headers.get('location')).toBe('https://login.example/start');
+    });
+
+    it('fromHono throws off the Hono adapter (no native context)', async () => {
+        const bridged = fromHono(async (_c, next) => {
+            await next();
+        });
+        const fakeGiriContext = {
+            get: () => undefined,
+            set: () => undefined,
+        } as never;
+
+        await expect(bridged(fakeGiriContext, async () => undefined)).rejects.toThrow(
+            /only run on the Hono adapter/,
+        );
     });
 });

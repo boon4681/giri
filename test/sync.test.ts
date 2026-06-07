@@ -176,6 +176,104 @@ describe('syncProject', () => {
         expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
     });
 
+    it('types c.get from a fromHono() middleware Vars generic', async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const outDir = join(tmp, '.giri');
+        await mkdir(join(routesDir, 'me'), { recursive: true });
+        await writeFile(
+            join(routesDir, 'me', '+shared.ts'),
+            [
+                'import { fromHono } from "@boon4681/giri/adapters/hono";',
+                '',
+                '// A bare fromHono() (no stack()) still types c.get via its Vars generic.',
+                'export const middleware =',
+                '  fromHono<{ "user-google": { email: string } }>(async (_c, next) => { await next(); });',
+            ].join('\n'),
+        );
+        await writeFile(
+            join(routesDir, 'me', '+get.ts'),
+            [
+                'import type { Handle } from "./$types";',
+                'export const handle: Handle = (c) => {',
+                '  const email: string = c.get("user-google").email;',
+                '  // @ts-expect-error user-google.email is a string, not a number',
+                '  const bad: number = c.get("user-google").email;',
+                '  return c.json({ email, bad });',
+                '};',
+            ].join('\n'),
+        );
+        await syncProject({ outDir }, { cwd: tmp });
+
+        const program = ts.createProgram([join(routesDir, 'me', '+get.ts')], {
+            target: ts.ScriptTarget.ES2022,
+            module: ts.ModuleKind.NodeNext,
+            moduleResolution: ts.ModuleResolutionKind.NodeNext,
+            strict: true,
+            skipLibCheck: true,
+            rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
+            baseUrl: process.cwd(),
+            paths: {
+                '@boon4681/giri': ['src/index.ts'],
+                '@boon4681/giri/adapters/hono': ['src/adapters/hono.ts'],
+            },
+            types: ['node'],
+        });
+        const diagnostics = ts.getPreEmitDiagnostics(program);
+        expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
+    });
+
+    it("types c.get from a Hono plugin's ContextVariableMap augmentation (default fromHono Vars)", async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const outDir = join(tmp, '.giri');
+        await mkdir(join(routesDir, 'me'), { recursive: true });
+        await writeFile(
+            join(routesDir, 'me', '+shared.ts'),
+            [
+                'import { fromHono } from "@boon4681/giri/adapters/hono";',
+                '',
+                '// Mimic what @hono/oauth-providers does: augment Hono\'s global ContextVariableMap.',
+                'declare module "hono" {',
+                '  interface ContextVariableMap {',
+                '    "user-google": { email: string } | undefined;',
+                '  }',
+                '}',
+                '',
+                '// No explicit generic - fromHono defaults Vars to Hono\'s ContextVariableMap.',
+                'export const middleware = fromHono(async (_c, next) => { await next(); });',
+            ].join('\n'),
+        );
+        await writeFile(
+            join(routesDir, 'me', '+get.ts'),
+            [
+                'import type { Handle } from "./$types";',
+                'export const handle: Handle = (c) => {',
+                '  const user = c.get("user-google");',
+                '  // @ts-expect-error user-google may be undefined (the augmented type)',
+                '  const email: string = user.email;',
+                '  return c.json({ email: c.get("user-google")?.email });',
+                '};',
+            ].join('\n'),
+        );
+        await syncProject({ outDir }, { cwd: tmp });
+
+        const program = ts.createProgram([join(routesDir, 'me', '+get.ts')], {
+            target: ts.ScriptTarget.ES2022,
+            module: ts.ModuleKind.NodeNext,
+            moduleResolution: ts.ModuleResolutionKind.NodeNext,
+            strict: true,
+            skipLibCheck: true,
+            rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
+            baseUrl: process.cwd(),
+            paths: {
+                '@boon4681/giri': ['src/index.ts'],
+                '@boon4681/giri/adapters/hono': ['src/adapters/hono.ts'],
+            },
+            types: ['node'],
+        });
+        const diagnostics = ts.getPreEmitDiagnostics(program);
+        expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
+    });
+
     it('propagates folder middleware vars into a downstream handler c.get', async () => {
         const routesDir = join(tmp, 'src', 'routes');
         const outDir = join(tmp, '.giri');

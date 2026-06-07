@@ -8,6 +8,7 @@ import {
     type StatusCode,
     type TypedResponse,
     type ValidatedInput,
+    nativeContextBrand,
     typedResponseBrand,
 } from './types';
 
@@ -21,6 +22,8 @@ export interface CreateContextOptions<
     params?: Params;
     validated?: Input;
     app?: Services;
+    /** The adapter's native per-request context, stashed for backend-specific bridges. */
+    native?: unknown;
 }
 
 export function createTypedResponse<
@@ -49,7 +52,7 @@ export function createContext<
     const store = new Map<string, unknown>();
     const validated = options.validated ?? ({} as Input);
 
-    return {
+    const context: Context<Params, Input> = {
         params: options.params ?? ({} as Params),
         app: options.app ?? ({} as Services),
         req: {
@@ -77,6 +80,10 @@ export function createContext<
         text: (text, status = 200 as never, headers) =>
             createTypedResponse(text, status, 'text', headers),
     };
+    
+    (context as unknown as Record<symbol, unknown>)[nativeContextBrand] = options.native;
+
+    return context;
 }
 
 export function typedResponseToResponse(response: TypedResponse<unknown>): Response {

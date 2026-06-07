@@ -159,6 +159,11 @@
   resolved "https://registry.yarnpkg.com/@hono/node-server/-/node-server-2.0.4.tgz#22d7ae19fb961eaf189916014c707529fd667eca"
   integrity sha512-Ut3y0dMMPWy6bZ2kVfx25EOVbZlm15dhF4mOsezMlhpNHy+4MkU1qN9Y6lnruYi4wPmFzimGX2X7LF/FwHli4A==
 
+"@hono/oauth-providers@^0.8.5":
+  version "0.8.5"
+  resolved "https://registry.yarnpkg.com/@hono/oauth-providers/-/oauth-providers-0.8.5.tgz#b175a7d3441120c2d3e38ebe985dca5e3be8eb5f"
+  integrity sha512-hgEDH/gUmB/opman9jvT8dLItZsSC9M9yFiaam0b6InK7WQkdzIcaRAkdda47QpixnK9S1Ah2vjDB2U16LkMnA==
+
 "@hono/standard-validator@^0.2.1":
   version "0.2.2"
   resolved "https://registry.yarnpkg.com/@hono/standard-validator/-/standard-validator-0.2.2.tgz#664846d8b53e0a0c4f5cb82c113c52950bf4b2ec"
@@ -415,6 +420,11 @@ deep-eql@^5.0.1:
   version "5.0.2"
   resolved "https://registry.yarnpkg.com/deep-eql/-/deep-eql-5.0.2.tgz#4b756d8d770a9257300825d52a2c2cff99c3a341"
   integrity sha512-h5k/5U50IJJFpzfL6nO9jaaumfjO/f2NjK/oYB2Djzm4p9L+3T9qWpZqZ2hAbLPuuYq9wrU08WQyBTL5GbPk5Q==
+
+dotenv@^17.4.2:
+  version "17.4.2"
+  resolved "https://registry.yarnpkg.com/dotenv/-/dotenv-17.4.2.tgz#c07e54a746e11eba021dd9e1047ced5afdc1c034"
+  integrity sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==
 
 es-module-lexer@^1.7.0:
   version "1.7.0"

@@ -12,8 +12,10 @@
         "test": "vitest --run"
     },
     "dependencies": {
-        "@hono/node-server": "^2.0.3",
         "@boon4681/giri": "link:..",
+        "@hono/node-server": "^2.0.3",
+        "@hono/oauth-providers": "^0.8.5",
+        "dotenv": "^17.4.2",
         "hono": "^4.12.18",
         "zod": "^4.4.3"
     },

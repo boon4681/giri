@@ -154,6 +154,27 @@ async function ensureTsConfig(cwd: string): Promise<void> {
     );
 }
 
+async function missingDeps(cwd: string, candidates: string[]): Promise<string[]> {
+    let pkg: Record<string, unknown> = {};
+    try {
+        pkg = JSON.parse(await readFile(join(cwd, 'package.json'), 'utf8')) as Record<string, unknown>;
+    } catch {
+        // No/!valid package.json — treat everything as missing (init already guards this case).
+    }
+
+    const present = new Set<string>();
+    for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+        const map = pkg[field];
+        if (map && typeof map === 'object') {
+            for (const name of Object.keys(map as Record<string, unknown>)) {
+                present.add(name);
+            }
+        }
+    }
+
+    return candidates.filter((name) => !present.has(name));
+}
+
 /** Guess the package manager from the user agent npm/yarn/pnpm/bun set when invoking the CLI. */
 function detectPackageManager(): PackageManager {
     const ua = process.env.npm_config_user_agent ?? '';
@@ -218,6 +239,13 @@ async function selectAdapter(interactive: boolean): Promise<AdapterChoice | null
 }
 
 async function initProject(cwd: string, flags: InitFlags): Promise<void> {
+    if (!existsSync(join(cwd, 'package.json'))) {
+        throw new Error(
+            'No package.json found. Run `giri init` inside an existing project - set one up first ' +
+                '(e.g. `npm init -y` and install typescript), then re-run.',
+        );
+    }
+
     const interactive = Boolean(process.stdout.isTTY) && !flags.yes;
     prompts.intro('giri init');
 
@@ -237,7 +265,7 @@ async function initProject(cwd: string, flags: InitFlags): Promise<void> {
     }
 
     if (!adapter.available) {
-        prompts.cancel(`The ${adapter.label} adapter isn't available yet — only Hono ships today.`);
+        prompts.cancel(`The ${adapter.label} adapter isn't available yet - only Hono ships today.`);
         return;
     }
 
@@ -265,6 +293,19 @@ async function initProject(cwd: string, flags: InitFlags): Promise<void> {
     prompts.log.success(`scaffolded a ${adapter.label} project`);
 
     const pm = flags.packageManager ?? detectPackageManager();
+    const deps = await missingDeps(cwd, ['@boon4681/giri', ...adapter.deps, 'zod']);
+    const devDeps = await missingDeps(cwd, ['typescript', '@types/node']);
+
+    if (deps.length === 0 && devDeps.length === 0) {
+        prompts.outro('All dependencies already present. Run `giri serve` to start the dev server.');
+        return;
+    }
+
+    const planLines = [
+        ...(deps.length ? [`  ${pm} ${installArgs(pm, deps, false).join(' ')}`] : []),
+        ...(devDeps.length ? [`  ${pm} ${installArgs(pm, devDeps, true).join(' ')}`] : []),
+    ];
+
     let install = flags.install;
     if (install === undefined) {
         if (!interactive) {
@@ -272,34 +313,33 @@ async function initProject(cwd: string, flags: InitFlags): Promise<void> {
         } else {
             const answer = await prompts.confirm({ message: `Install dependencies with ${pm}?` });
             if (prompts.isCancel(answer)) {
-                prompts.cancel('Cancelled — files written, skipped install.');
+                prompts.cancel('Cancelled - files written, skipped install.');
                 return;
             }
             install = answer;
         }
     }
 
-    const deps = ['@boon4681/giri', ...adapter.deps, 'zod'];
-    const devDeps = ['typescript', '@types/node'];
-
     if (install) {
         try {
-            prompts.log.step(`Installing ${deps.join(', ')}`);
-            await runCommand(pm, installArgs(pm, deps, false), cwd);
-            prompts.log.step(`Installing dev deps ${devDeps.join(', ')}`);
-            await runCommand(pm, installArgs(pm, devDeps, true), cwd);
+            if (deps.length) {
+                prompts.log.step(`Installing ${deps.join(', ')}`);
+                await runCommand(pm, installArgs(pm, deps, false), cwd);
+            }
+            if (devDeps.length) {
+                prompts.log.step(`Installing dev deps ${devDeps.join(', ')}`);
+                await runCommand(pm, installArgs(pm, devDeps, true), cwd);
+            }
         } catch (error) {
             prompts.log.error(error instanceof Error ? error.message : String(error));
-            prompts.outro(`Install failed — run \`${pm} ${installArgs(pm, deps, false).join(' ')}\` yourself, then \`giri serve\`.`);
+            prompts.outro(`Install failed - run these yourself, then \`giri serve\`:\n${planLines.join('\n')}`);
             return;
         }
         prompts.outro('Ready. Run `giri serve` to start the dev server.');
         return;
     }
 
-    prompts.outro(
-        `Next:\n  ${pm} ${installArgs(pm, deps, false).join(' ')}\n  ${pm} ${installArgs(pm, devDeps, true).join(' ')}\n  giri serve`,
-    );
+    prompts.outro(`Next:\n${planLines.join('\n')}\n  giri serve`);
 }
 
 function displayHost(address: string): string {
