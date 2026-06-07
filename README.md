@@ -2,6 +2,8 @@
 
 A stupid attempt from a stupid man who lack of foresight trying to make a backend framework.
 
+![NPM Version](https://img.shields.io/npm/v/%40boon4681%2Fgiri)
+
 <img width="128" src="https://raw.githubusercontent.com/boon4681/giri/refs/heads/main/.image/logo.png" />
 
 ## F*CK NPM PUBLISH i have to change this package name from `guri` to `giri` to `@boon4681/giri`  because of the name collision and there is no contact about request a package name that hit npm stupid filter.
