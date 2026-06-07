@@ -1,6 +1,6 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { buildGuriApp, defineConfig } from '../src';
+import { buildGiriApp, defineConfig } from '../src';
 import { hono } from '../src/adapters/hono';
 
 const tmp = join(process.cwd(), 'test', '.tmp', 'hono');
@@ -14,7 +14,7 @@ describe('hono adapter', () => {
         await rm(tmp, { recursive: true, force: true });
     });
 
-    it('serves file routes through the portable guri context', async () => {
+    it('serves file routes through the portable giri context', async () => {
         const routesDir = join(tmp, 'src', 'routes');
         await mkdir(join(routesDir, 'users', '[id]'), { recursive: true });
         await writeFile(
@@ -40,13 +40,13 @@ describe('hono adapter', () => {
 
         const config = defineConfig({
             adapter: hono(),
-            outDir: join(tmp, '.guri'),
+            outDir: join(tmp, '.giri'),
         });
-        const built = await buildGuriApp(config, { cwd: tmp });
+        const built = await buildGiriApp(config, { cwd: tmp });
 
         const response = await config.adapter.fetch(
             built.app,
-            new Request('http://guri.test/users/42'),
+            new Request('http://giri.test/users/42'),
         );
 
         expect(response.status).toBe(200);
@@ -66,13 +66,13 @@ describe('hono adapter', () => {
             'export const handle = (c) => c.json({ name: c.app.db.name });',
         );
 
-        const config = defineConfig({ adapter: hono(), outDir: join(tmp, '.guri') });
+        const config = defineConfig({ adapter: hono(), outDir: join(tmp, '.giri') });
         const services = { db: { name: 'primary' } };
-        const built = await buildGuriApp(config, { cwd: tmp, services });
+        const built = await buildGiriApp(config, { cwd: tmp, services });
 
         const response = await config.adapter.fetch(
             built.app,
-            new Request('http://guri.test/'),
+            new Request('http://giri.test/'),
         );
 
         expect(response.status).toBe(200);
@@ -86,7 +86,7 @@ describe('hono adapter', () => {
             join(routesDir, 'users', '+post.ts'),
             [
                 'const json = {',
-                '  [Symbol.for("guri.input-schema")]: true,',
+                '  [Symbol.for("giri.input-schema")]: true,',
                 '  validate(value) {',
                 '    return typeof value?.name === "string"',
                 '      ? { ok: true, value: { name: value.name.trim() } }',
@@ -96,17 +96,17 @@ describe('hono adapter', () => {
                 '    return { type: "object", properties: { name: { type: "string" } }, required: ["name"] };',
                 '  },',
                 '};',
-                'export const body = { [Symbol.for("guri.body-schema")]: true, contents: { json } };',
+                'export const body = { [Symbol.for("giri.body-schema")]: true, contents: { json } };',
                 'export const handle = (c) => c.json({ name: c.req.valid("body").name }, 201);',
             ].join('\n'),
         );
 
         const config = defineConfig({ adapter: hono() });
-        const built = await buildGuriApp(config, { cwd: tmp });
+        const built = await buildGiriApp(config, { cwd: tmp });
 
         const ok = await config.adapter.fetch(
             built.app,
-            new Request('http://guri.test/users', {
+            new Request('http://giri.test/users', {
                 method: 'POST',
                 body: JSON.stringify({ name: ' Ada ' }),
             }),
@@ -116,7 +116,7 @@ describe('hono adapter', () => {
 
         const bad = await config.adapter.fetch(
             built.app,
-            new Request('http://guri.test/users', {
+            new Request('http://giri.test/users', {
                 method: 'POST',
                 body: JSON.stringify({}),
             }),
@@ -131,30 +131,30 @@ describe('hono adapter', () => {
             join(routesDir, 'users', '+post.ts'),
             [
                 'const json = {',
-                '  [Symbol.for("guri.input-schema")]: true,',
+                '  [Symbol.for("giri.input-schema")]: true,',
                 '  validate: (v) => (typeof v?.name === "string"',
                 '    ? { ok: true, value: { name: v.name } }',
                 '    : { ok: false, issues: [{ path: ["name"] }] }),',
                 '  toJsonSchema: () => ({ type: "object", properties: { name: { type: "string" } } }),',
                 '};',
                 'const form = {',
-                '  [Symbol.for("guri.input-schema")]: true,',
+                '  [Symbol.for("giri.input-schema")]: true,',
                 '  validate: (v) => (typeof v?.name === "string" && typeof v?.avatar === "string"',
                 '    ? { ok: true, value: { name: v.name, avatar: v.avatar } }',
                 '    : { ok: false, issues: [{ path: ["avatar"] }] }),',
                 '  toJsonSchema: () => ({ type: "object", properties: { name: { type: "string" }, avatar: { type: "string" } } }),',
                 '};',
-                'export const body = { [Symbol.for("guri.body-schema")]: true, contents: { json, form } };',
+                'export const body = { [Symbol.for("giri.body-schema")]: true, contents: { json, form } };',
                 'export const handle = (c) => c.json(c.req.valid("body"));',
             ].join('\n'),
         );
 
         const config = defineConfig({ adapter: hono() });
-        const built = await buildGuriApp(config, { cwd: tmp });
+        const built = await buildGiriApp(config, { cwd: tmp });
 
         const fromJson = await config.adapter.fetch(
             built.app,
-            new Request('http://guri.test/users', {
+            new Request('http://giri.test/users', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ name: 'Ada' }),
@@ -168,7 +168,7 @@ describe('hono adapter', () => {
         form.set('avatar', 'pic.png');
         const fromForm = await config.adapter.fetch(
             built.app,
-            new Request('http://guri.test/users', { method: 'POST', body: form }),
+            new Request('http://giri.test/users', { method: 'POST', body: form }),
         );
         expect(fromForm.status).toBe(200);
         await expect(fromForm.json()).resolves.toEqual({
@@ -178,7 +178,7 @@ describe('hono adapter', () => {
 
         const invalid = await config.adapter.fetch(
             built.app,
-            new Request('http://guri.test/users', {
+            new Request('http://giri.test/users', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({}),
@@ -191,7 +191,7 @@ describe('hono adapter', () => {
         const routesDir = join(tmp, 'src', 'routes');
         await mkdir(join(routesDir, 'users'), { recursive: true });
         // Import the actual zod adapter by absolute source path (a tmp route can't resolve the
-        // bare "guri/validators/zod" specifier), so this drives the real `zod.body()`.
+        // bare "giri/validators/zod" specifier), so this drives the real `zod.body()`.
         const zodAdapter = join(process.cwd(), 'src', 'validators', 'zod').replace(/\\/g, '/');
         await writeFile(
             join(routesDir, 'users', '+post.ts'),
@@ -209,11 +209,11 @@ describe('hono adapter', () => {
         );
 
         const config = defineConfig({ adapter: hono() });
-        const built = await buildGuriApp(config, { cwd: tmp });
+        const built = await buildGiriApp(config, { cwd: tmp });
 
         const fromJson = await config.adapter.fetch(
             built.app,
-            new Request('http://guri.test/users', {
+            new Request('http://giri.test/users', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ name: 'Ada' }),
@@ -227,7 +227,7 @@ describe('hono adapter', () => {
         form.set('avatar', 'pic.png');
         const fromForm = await config.adapter.fetch(
             built.app,
-            new Request('http://guri.test/users', { method: 'POST', body: form }),
+            new Request('http://giri.test/users', { method: 'POST', body: form }),
         );
         expect(fromForm.status).toBe(200);
         await expect(fromForm.json()).resolves.toEqual({
@@ -238,7 +238,7 @@ describe('hono adapter', () => {
         // zod's own validation (min length) rejects through the same pipeline.
         const invalid = await config.adapter.fetch(
             built.app,
-            new Request('http://guri.test/users', {
+            new Request('http://giri.test/users', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ name: '' }),
@@ -269,11 +269,11 @@ describe('hono adapter', () => {
                 '@/*': 'src/*',
             },
         });
-        const built = await buildGuriApp(config, { cwd: tmp });
+        const built = await buildGiriApp(config, { cwd: tmp });
 
         const response = await config.adapter.fetch(
             built.app,
-            new Request('http://guri.test/status'),
+            new Request('http://giri.test/status'),
         );
 
         expect(response.status).toBe(200);

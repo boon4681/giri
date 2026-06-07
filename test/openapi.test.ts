@@ -1,11 +1,11 @@
 import { join } from 'node:path';
 import type { ScannedRoute } from '../src/routes';
-import type { GuriPaths } from '../src/types';
+import type { GiriPaths } from '../src/types';
 import { buildOpenApiDocument } from '../src/generator/openapi';
 import type { RouteResponses } from '../src/generator/schema';
 import type { RouteInputSchemas } from '../src/generator/inputs';
 
-const paths: GuriPaths = {
+const paths: GiriPaths = {
     cwd: join(process.cwd(), 'test', '.tmp', 'no-package-here'),
     routesDir: '',
     outDir: '',
@@ -55,7 +55,7 @@ describe('buildOpenApiDocument', () => {
         const doc = buildOpenApiDocument(paths, routes, { responsesByFile: responses, inputsByFile: inputs }) as any;
 
         expect(doc.openapi).toBe('3.1.0');
-        expect(doc.info).toEqual({ title: 'guri API', version: '0.0.0' });
+        expect(doc.info).toEqual({ title: 'giri API', version: '0.0.0' });
         const op = doc.paths['/users/{id}'].patch;
         expect(op.parameters).toEqual([
             { name: 'id', in: 'path', required: true, schema: { type: 'string' } },

@@ -2,18 +2,18 @@ import Module from 'node:module';
 import { isAbsolute, join, resolve } from 'node:path';
 import { safeRegister } from './loader/loader';
 import { scanRoutes, type ScannedRoute } from './routes';
-import type { GuriBodySchema, GuriConfig, GuriInputSchema, GuriPaths, Handle, Middleware, RouteInput, Services } from './types';
-import { isGuriBodySchema, isGuriInputSchema } from './validation';
+import type { GiriBodySchema, GiriConfig, GiriInputSchema, GiriPaths, Handle, Middleware, RouteInput, Services } from './types';
+import { isGiriBodySchema, isGiriInputSchema } from './validation';
 
-export interface BuildGuriAppOptions {
+export interface BuildGiriAppOptions {
     cwd?: string;
     services?: Services;
 }
 
-export interface BuiltGuriApp<App> {
+export interface BuiltGiriApp<App> {
     app: App;
     routes: ScannedRoute[];
-    paths: GuriPaths;
+    paths: GiriPaths;
 }
 
 interface RouteModule {
@@ -58,18 +58,18 @@ function normalizeMiddleware(value: unknown, file: string): Middleware[] {
     throw new Error(`Middleware export in ${file} must be a function or an array of functions.`);
 }
 
-function assertBodySchema(value: unknown, file: string): asserts value is GuriBodySchema {
-    if (!isGuriBodySchema(value)) {
+function assertBodySchema(value: unknown, file: string): asserts value is GiriBodySchema {
+    if (!isGiriBodySchema(value)) {
         throw new Error(
-            `${file}: "body" must be wrapped with a validator, e.g. \`export const body = zod.body({ json: ... })\` from guri/validators/zod.`,
+            `${file}: "body" must be wrapped with a validator, e.g. \`export const body = zod.body({ json: ... })\` from giri/validators/zod.`,
         );
     }
 }
 
-function assertQuerySchema(value: unknown, file: string): asserts value is GuriInputSchema {
-    if (!isGuriInputSchema(value)) {
+function assertQuerySchema(value: unknown, file: string): asserts value is GiriInputSchema {
+    if (!isGiriInputSchema(value)) {
         throw new Error(
-            `${file}: "query" must be wrapped with a validator, e.g. \`export const query = zod.query(...)\` from guri/validators/zod.`,
+            `${file}: "query" must be wrapped with a validator, e.g. \`export const query = zod.query(...)\` from giri/validators/zod.`,
         );
     }
 }
@@ -119,7 +119,7 @@ function matchAlias(request: string, key: string): string | undefined {
 
 function resolveAliasRequest(
     request: string,
-    alias: GuriConfig['alias'],
+    alias: GiriConfig['alias'],
     cwd: string,
 ): string | undefined {
     for (const [key, value] of Object.entries(alias ?? {})) {
@@ -139,7 +139,7 @@ function resolveAliasRequest(
     return undefined;
 }
 
-export function registerAliasResolver(alias: GuriConfig['alias'], cwd: string): () => void {
+export function registerAliasResolver(alias: GiriConfig['alias'], cwd: string): () => void {
     if (!alias || Object.keys(alias).length === 0) {
         return () => { };
     }
@@ -149,7 +149,7 @@ export function registerAliasResolver(alias: GuriConfig['alias'], cwd: string): 
     };
     const originalResolveFilename = moduleWithResolver._resolveFilename;
 
-    moduleWithResolver._resolveFilename = function resolveWithGuriAlias(
+    moduleWithResolver._resolveFilename = function resolveWithGiriAlias(
         request,
         parent,
         isMain,
@@ -169,57 +169,57 @@ export function registerAliasResolver(alias: GuriConfig['alias'], cwd: string): 
     };
 }
 
-const GURI_ALIAS_PREFIX = '$guri/';
-let guriOutDir: string | undefined;
-let guriResolverInstalled = false;
+const GIRI_ALIAS_PREFIX = '$giri/';
+let giriOutDir: string | undefined;
+let giriResolverInstalled = false;
 
 /**
- * Install a process-lifetime resolver for the internal `$guri/*` alias
+ * Install a process-lifetime resolver for the internal `$giri/*` alias
  */
-export function ensureGuriAliasResolver(outDir: string): void {
-    guriOutDir = outDir;
-    if (guriResolverInstalled) {
+export function ensureGiriAliasResolver(outDir: string): void {
+    giriOutDir = outDir;
+    if (giriResolverInstalled) {
         return;
     }
-    guriResolverInstalled = true;
+    giriResolverInstalled = true;
 
     const moduleWithResolver = Module as typeof Module & {
         _resolveFilename: (request: string, parent: unknown, isMain: boolean, options: unknown) => string;
     };
     const originalResolveFilename = moduleWithResolver._resolveFilename;
 
-    moduleWithResolver._resolveFilename = function resolveWithGuriInternalAlias(
+    moduleWithResolver._resolveFilename = function resolveWithGiriInternalAlias(
         request,
         parent,
         isMain,
         options,
     ) {
         const mapped =
-            typeof request === 'string' && request.startsWith(GURI_ALIAS_PREFIX) && guriOutDir
-                ? join(guriOutDir, request.slice(GURI_ALIAS_PREFIX.length))
+            typeof request === 'string' && request.startsWith(GIRI_ALIAS_PREFIX) && giriOutDir
+                ? join(giriOutDir, request.slice(GIRI_ALIAS_PREFIX.length))
                 : request;
         return originalResolveFilename.call(this, mapped, parent, isMain, options);
     };
 }
 
-export function resolveGuriPaths(config: Pick<GuriConfig, 'outDir'>, cwd = process.cwd()): GuriPaths {
+export function resolveGiriPaths(config: Pick<GiriConfig, 'outDir'>, cwd = process.cwd()): GiriPaths {
     return {
         cwd: resolve(cwd),
         routesDir: resolve(cwd, 'src/routes'),
-        outDir: resolve(cwd, config.outDir ?? '.guri'),
+        outDir: resolve(cwd, config.outDir ?? '.giri'),
     };
 }
 
-export async function buildGuriApp<App>(
-    config: GuriConfig<App>,
-    options: BuildGuriAppOptions = {},
-): Promise<BuiltGuriApp<App>> {
-    const paths = resolveGuriPaths(config, options.cwd);
+export async function buildGiriApp<App>(
+    config: GiriConfig<App>,
+    options: BuildGiriAppOptions = {},
+): Promise<BuiltGiriApp<App>> {
+    const paths = resolveGiriPaths(config, options.cwd);
     const routes = await scanRoutes(paths.routesDir);
     const app = config.adapter.createApp();
-    // Install the persistent `$guri` resolver BEFORE esbuild-register: it patches
+    // Install the persistent `$giri` resolver BEFORE esbuild-register: it patches
     // `_resolveFilename` too, and its unregister() restores whatever it captured
-    ensureGuriAliasResolver(paths.outDir);
+    ensureGiriAliasResolver(paths.outDir);
     const { unregister } = await safeRegister();
     const unregisterAliasResolver = registerAliasResolver(config.alias, paths.cwd);
 

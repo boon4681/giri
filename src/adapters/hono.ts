@@ -2,12 +2,12 @@ import { serve as serveNode } from '@hono/node-server';
 import { Hono } from 'hono';
 import type { Context as HonoContext } from 'hono';
 import { composeMiddleware, createContext, toResponse } from '../context';
-import type { GuriAdapter, GuriRouteRegistration } from '../types';
+import type { GiriAdapter, GiriRouteRegistration } from '../types';
 import { prepareRequestInput } from '../validation';
 
-export type HonoGuriApp = Hono;
+export type HonoGiriApp = Hono;
 
-async function routeHandler(honoContext: HonoContext, route: GuriRouteRegistration): Promise<Response> {
+async function routeHandler(honoContext: HonoContext, route: GiriRouteRegistration): Promise<Response> {
     const prepared = await prepareRequestInput(honoContext.req.raw, route.input);
     if (!prepared.ok) {
         return toResponse(prepared.response);
@@ -23,7 +23,7 @@ async function routeHandler(honoContext: HonoContext, route: GuriRouteRegistrati
     return toResponse(result);
 }
 
-function registerHonoRoute(app: Hono, route: GuriRouteRegistration): void {
+function registerHonoRoute(app: Hono, route: GiriRouteRegistration): void {
     type HonoHandler = (c: HonoContext) => Promise<Response>;
 
     const handler: HonoHandler = (c) => routeHandler(c, route);
@@ -38,7 +38,7 @@ function registerHonoRoute(app: Hono, route: GuriRouteRegistration): void {
     throw new Error(`Hono adapter does not support ${route.method}.`);
 }
 
-export function hono(): GuriAdapter<HonoGuriApp> {
+export function hono(): GiriAdapter<HonoGiriApp> {
     return {
         name: 'hono',
         createApp: () => new Hono({ strict: false }),

@@ -3,7 +3,7 @@ import { composeMiddleware, createContext, defineMiddleware, isTypedResponse, to
 describe('context', () => {
     it('creates typed JSON responses and converts them to real responses', async () => {
         const context = createContext({
-            request: new Request('http://guri.test/hello'),
+            request: new Request('http://giri.test/hello'),
             params: { id: '123' },
         });
 
@@ -20,7 +20,7 @@ describe('context', () => {
 
     it('runs middleware before the handler and preserves context values', async () => {
         const context = createContext({
-            request: new Request('http://guri.test/hello'),
+            request: new Request('http://giri.test/hello'),
         });
         const middleware = defineMiddleware(async (c, next) => {
             c.set('user', { id: 'u1' });

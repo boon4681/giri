@@ -147,7 +147,7 @@ function constituents(type: ts.Type): ts.Type[] {
 
 /**
  * Extract per-status response schemas for a route's `handle` export by typing each of
- * its return expressions and unwrapping guri's `TypedResponse<data, status, format>`.
+ * its return expressions and unwrapping giri's `TypedResponse<data, status, format>`.
  */
 export function extractRouteResponses(program: ts.Program, file: string): RouteResponses {
     const result: RouteResponses = { responses: [], opaque: false, warnings: [], $defs: {} };

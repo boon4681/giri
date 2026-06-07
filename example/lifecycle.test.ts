@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { buildGuriApp, loadLifecycle, runInit } from "guri";
-import config from "./guri.config";
+import { buildGiriApp, loadLifecycle, runInit } from "giri";
+import config from "./giri.config";
 
 const cwd = fileURLToPath(new URL(".", import.meta.url));
 
@@ -17,10 +17,10 @@ describe("example lifecycle", () => {
         const services = await runInit(lifecycle);
         expect(services).toEqual({ a: 5 });
 
-        const built = await buildGuriApp(config, { cwd, services });
+        const built = await buildGiriApp(config, { cwd, services });
         const response = await config.adapter.fetch(
             built.app,
-            new Request("http://guri.test/"),
+            new Request("http://giri.test/"),
         );
 
         expect(response.status).toBe(200);

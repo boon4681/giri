@@ -1,16 +1,16 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { buildGuriApp } from "guri";
-import config from "./guri.config";
+import { buildGiriApp } from "giri";
+import config from "./giri.config";
 
 const cwd = fileURLToPath(new URL(".", import.meta.url));
 
 describe("example app", () => {
     it("serves generated file routes through the configured adapter", async () => {
-        const built = await buildGuriApp(config, { cwd });
+        const built = await buildGiriApp(config, { cwd });
         const response = await config.adapter.fetch(
             built.app,
-            new Request("http://guri.test/users/1", {
+            new Request("http://giri.test/users/1", {
                 headers: {
                     "x-request-id": "demo-1",
                 },
@@ -25,11 +25,11 @@ describe("example app", () => {
     });
 
     it("validates request bodies for declared inputs", async () => {
-        const built = await buildGuriApp(config, { cwd });
+        const built = await buildGiriApp(config, { cwd });
 
         const created = await config.adapter.fetch(
             built.app,
-            new Request("http://guri.test/users", {
+            new Request("http://giri.test/users", {
                 method: "POST",
                 body: JSON.stringify({ name: "Katherine Johnson" }),
             }),
@@ -42,7 +42,7 @@ describe("example app", () => {
 
         const rejected = await config.adapter.fetch(
             built.app,
-            new Request("http://guri.test/users", {
+            new Request("http://giri.test/users", {
                 method: "POST",
                 body: JSON.stringify({ name: "" }),
             }),

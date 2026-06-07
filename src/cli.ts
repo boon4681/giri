@@ -2,12 +2,12 @@
 import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { buildGuriApp } from './app';
+import { buildGiriApp } from './app';
 import { load } from './loader/loader';
 import { createWatchUpdater, syncProject } from './generator';
 import { loadLifecycle, runInit } from './lifecycle';
 import { log, muted } from './logger';
-import type { Services, GuriConfig, GuriFetchHandler, GuriServer } from './types';
+import type { Services, GiriConfig, GiriFetchHandler, GiriServer } from './types';
 
 interface ParsedFlags {
     port?: number;
@@ -16,13 +16,13 @@ interface ParsedFlags {
 }
 
 function help(): void {
-    console.log(`guri
+    console.log(`giri
 
 Usage:
-  guri init
-  guri sync
-  guri serve [--port 3000] [--host 127.0.0.1] [--no-watch]
-  guri build
+  giri init
+  giri sync
+  giri serve [--port 3000] [--host 127.0.0.1] [--no-watch]
+  giri build
 `);
 }
 
@@ -47,7 +47,7 @@ function parseFlags(args: string[]): ParsedFlags {
 
 async function ensureGitignore(cwd: string): Promise<void> {
     const file = join(cwd, '.gitignore');
-    const entry = '.guri';
+    const entry = '.giri';
     if (!existsSync(file)) {
         await writeFile(file, `${entry}\n`);
         return;
@@ -69,7 +69,7 @@ async function ensureTsConfig(cwd: string): Promise<void> {
         file,
         `${JSON.stringify(
             {
-                extends: './.guri/tsconfig.json',
+                extends: './.giri/tsconfig.json',
                 compilerOptions: {
                     target: 'ES2022',
                     lib: ['ES2022', 'DOM'],
@@ -89,13 +89,13 @@ async function ensureTsConfig(cwd: string): Promise<void> {
 }
 
 async function initProject(cwd: string): Promise<void> {
-    const configPath = join(cwd, 'guri.config.ts');
+    const configPath = join(cwd, 'giri.config.ts');
     if (!existsSync(configPath)) {
         await writeFile(
             configPath,
             [
-                'import { defineConfig } from "guri";',
-                'import { hono } from "guri/adapters/hono";',
+                'import { defineConfig } from "giri";',
+                'import { hono } from "giri/adapters/hono";',
                 '',
                 'export default defineConfig({',
                 '   adapter: hono(),',
@@ -111,7 +111,7 @@ async function initProject(cwd: string): Promise<void> {
         await writeFile(
             routePath,
             [
-                'import type { Handle } from "guri";',
+                'import type { Handle } from "giri";',
                 '',
                 'export const handle: Handle = (c) => c.json({ ok: true });',
                 '',
@@ -121,7 +121,7 @@ async function initProject(cwd: string): Promise<void> {
 
     await ensureGitignore(cwd);
     await ensureTsConfig(cwd);
-    log.success('initialized guri project', 'init');
+    log.success('initialized giri project', 'init');
 }
 
 function displayHost(address: string): string {
@@ -131,7 +131,7 @@ function displayHost(address: string): string {
     return address.includes(':') ? `[${address}]` : address;
 }
 
-async function serveProject(config: GuriConfig, flags: ParsedFlags): Promise<void> {
+async function serveProject(config: GiriConfig, flags: ParsedFlags): Promise<void> {
     const initial = await syncProject(config);
     log.success(
         `synced ${initial.routes.length} route${initial.routes.length === 1 ? '' : 's'} ${muted(`at ${initial.paths.outDir}`)}`,
@@ -143,7 +143,7 @@ async function serveProject(config: GuriConfig, flags: ParsedFlags): Promise<voi
     const lifecycle = await loadLifecycle();
     const services: Services = await runInit(lifecycle);
 
-    let current = await buildGuriApp(config, { services });
+    let current = await buildGiriApp(config, { services });
 
     const port = flags.port ?? config.server?.port ?? 3000;
     const hostname = flags.hostname ?? config.server?.hostname;
@@ -182,7 +182,7 @@ async function serveProject(config: GuriConfig, flags: ParsedFlags): Promise<voi
                             const rel = name ? `src/${name.replace(/\\/g, '/')}` : 'src';
                             log.change(outcome === 'full' ? 'sync' : 'update', rel, bump(rel));
                         }
-                        current = await buildGuriApp(config, { services });
+                        current = await buildGiriApp(config, { services });
                     }
                 } catch (error) {
                     log.error(error instanceof Error ? error.message : String(error), 'watch');
@@ -202,7 +202,7 @@ async function serveProject(config: GuriConfig, flags: ParsedFlags): Promise<voi
         }
     }
 
-    const handler: GuriFetchHandler = (request) => config.adapter.fetch(current.app, request);
+    const handler: GiriFetchHandler = (request) => config.adapter.fetch(current.app, request);
 
     const server = config.adapter.serve(handler, { port, hostname }, (info) => {
         log.ready(`http://${displayHost(info.address)}:${info.port}`);
@@ -212,7 +212,7 @@ async function serveProject(config: GuriConfig, flags: ParsedFlags): Promise<voi
 }
 
 function registerShutdown(
-    server: GuriServer,
+    server: GiriServer,
     lifecycle: { teardown?: (services: Services) => void | Promise<void> },
     services: Services,
 ): void {

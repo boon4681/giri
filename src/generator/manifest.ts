@@ -1,6 +1,6 @@
 import { join, relative } from 'node:path';
 import type { ScannedRoute } from '../routes';
-import type { GuriPaths } from '../types';
+import type { GiriPaths } from '../types';
 import type { RouteInputSchemas } from './inputs';
 import type { RouteSecurity } from './route-meta';
 import type { RouteResponses } from './schema';
@@ -15,7 +15,7 @@ export interface ManifestData {
 
 /** Emits `manifest.json`: the machine-readable route table consumed by tooling. */
 export async function writeManifest(
-    paths: GuriPaths,
+    paths: GiriPaths,
     routes: ScannedRoute[],
     data: ManifestData = {},
 ): Promise<void> {

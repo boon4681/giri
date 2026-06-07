@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { resolveGuriPaths } from '../app';
+import { resolveGiriPaths } from '../app';
 import {
     routeParamsForDir,
     scanRouteFolders,
@@ -9,7 +9,7 @@ import {
     sharedFilesForDir,
     type ScannedRoute,
 } from '../routes';
-import type { GuriConfig, GuriPaths, HttpMethod } from '../types';
+import type { GiriConfig, GiriPaths, HttpMethod } from '../types';
 import { writeAppTypes } from './app-types';
 import type { RouteInputSchemas } from './inputs';
 import { writeManifest } from './manifest';
@@ -22,7 +22,7 @@ import { writeTsConfig } from './tsconfig';
 import { assertSafeOutDir, pruneDir, slash, typeFilePath } from './util';
 
 /** A `$types.d.ts` for every folder under `routes/` even empty/new ones. */
-async function typeFolders(paths: GuriPaths, routes: ScannedRoute[]): Promise<TypeFolder[]> {
+async function typeFolders(paths: GiriPaths, routes: ScannedRoute[]): Promise<TypeFolder[]> {
     // `scanRoutes` (tinyglobby) yields forward-slash paths while `scanRouteFolders` yields
     // native-separator paths, so key the map on a slash-normalized dir to match either form.
     const verbsByDir = new Map<string, { method: HttpMethod; file: string }[]>();
@@ -51,7 +51,7 @@ export interface SyncData {
 }
 
 export interface SyncResult {
-    paths: GuriPaths;
+    paths: GiriPaths;
     routes: ScannedRoute[];
     folders: TypeFolder[];
     /** Aggregated route metadata, so a watcher can update one route and re-serialize. */
@@ -63,7 +63,7 @@ export interface SyncResult {
  * broken project (or missing TypeScript) must not break `sync`, so failures yield an
  * empty map and the manifest simply omits `responses`.
  */
-function extractResponses(paths: GuriPaths, routes: ScannedRoute[]): Map<string, RouteResponses> {
+function extractResponses(paths: GiriPaths, routes: ScannedRoute[]): Map<string, RouteResponses> {
     const byFile = new Map<string, RouteResponses>();
     if (routes.length === 0) {
         return byFile;
@@ -81,7 +81,7 @@ function extractResponses(paths: GuriPaths, routes: ScannedRoute[]): Map<string,
             byFile.set(file, extractRouteResponses(program, file));
         }
     } catch (error) {
-        console.warn(`guri: skipped response schema generation (${(error as Error).message}).`);
+        console.warn(`giri: skipped response schema generation (${(error as Error).message}).`);
     }
 
     return byFile;
@@ -95,8 +95,8 @@ interface RuntimeMeta {
 
 /** Load route modules once to derive input schemas, middleware security, and openapi visibility. */
 async function extractMeta(
-    config: Pick<GuriConfig, 'alias'>,
-    paths: GuriPaths,
+    config: Pick<GiriConfig, 'alias'>,
+    paths: GiriPaths,
     routes: ScannedRoute[],
 ): Promise<RuntimeMeta> {
     const inputsByFile = new Map<string, RouteInputSchemas>();
@@ -120,23 +120,23 @@ async function extractMeta(
             }
         }
     } catch (error) {
-        console.warn(`guri: skipped input/security generation (${(error as Error).message}).`);
+        console.warn(`giri: skipped input/security generation (${(error as Error).message}).`);
     }
 
     return { inputsByFile, securityByFile, hiddenFiles };
 }
 
 /**
- * Scan `routes/` and (re)generate the whole `.guri/` payload. Each artifact has its own
+ * Scan `routes/` and (re)generate the whole `.giri/` payload. Each artifact has its own
  * module under `src/generator/`. Files are overwritten **in place** (no upfront wipe), so
  * the editor never sees `tsconfig`/`$types` vanish during a slow regeneration; orphaned
  * files from removed routes are pruned at the end.
  */
 export async function syncProject<App>(
-    config: Pick<GuriConfig<App>, 'alias' | 'outDir'>,
+    config: Pick<GiriConfig<App>, 'alias' | 'outDir'>,
     options: { cwd?: string } = {},
 ): Promise<SyncResult> {
-    const paths = resolveGuriPaths(config, options.cwd);
+    const paths = resolveGiriPaths(config, options.cwd);
     assertSafeOutDir(paths);
     const routes = await scanRoutes(paths.routesDir);
     const folders = await typeFolders(paths, routes);

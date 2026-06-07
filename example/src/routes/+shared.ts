@@ -1,4 +1,4 @@
-import { stack } from "guri";
+import { stack } from "giri";
 import type { Middleware } from "./$types";
 
 // Declares the var it injects. Every handler below sees `c.get("requestId"): string`.

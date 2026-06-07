@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { OpenAPIV3_1 } from 'openapi-types';
 import type { ScannedRoute } from '../routes';
-import type { GuriPaths } from '../types';
+import type { GiriPaths } from '../types';
 import type { RouteInputSchemas } from './inputs';
 import type { RouteSecurity } from './route-meta';
 import type { JSONSchema, ResponseSchema, RouteResponses } from './schema';
@@ -115,17 +115,17 @@ function readProjectInfo(cwd: string): { title: string; version: string } {
     if (existsSync(file)) {
         try {
             const pkg = JSON.parse(readFileSync(file, 'utf8')) as { name?: string; version?: string };
-            return { title: pkg.name ?? 'guri API', version: pkg.version ?? '0.0.0' };
+            return { title: pkg.name ?? 'giri API', version: pkg.version ?? '0.0.0' };
         } catch {
             // fall through to defaults
         }
     }
-    return { title: 'guri API', version: '0.0.0' };
+    return { title: 'giri API', version: '0.0.0' };
 }
 
 /** Assemble an OpenAPI 3.1 document from the scanned routes + generated schemas. */
 export function buildOpenApiDocument(
-    paths: GuriPaths,
+    paths: GiriPaths,
     routes: ScannedRoute[],
     data: OpenApiData = {},
 ): OpenAPIV3_1.Document {
@@ -193,9 +193,9 @@ export function buildOpenApiDocument(
     return document as unknown as OpenAPIV3_1.Document;
 }
 
-/** Emit `.guri/openapi.json`. */
+/** Emit `.giri/openapi.json`. */
 export async function writeOpenApi(
-    paths: GuriPaths,
+    paths: GiriPaths,
     routes: ScannedRoute[],
     data: OpenApiData = {},
 ): Promise<void> {

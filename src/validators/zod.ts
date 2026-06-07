@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { defineBodySchema, defineInputSchema } from '../validation';
-import type { BodyContentType, GuriBodySchema, GuriInputSchema } from '../types';
+import type { BodyContentType, GiriBodySchema, GiriInputSchema } from '../types';
 
-/** Wrap a single Zod schema as a guri input schema (validate via `safeParse`, JSON Schema via Zod 4). */
-function wrap<Schema extends z.ZodType>(schema: Schema): GuriInputSchema<z.infer<Schema>> {
+/** Wrap a single Zod schema as a giri input schema (validate via `safeParse`, JSON Schema via Zod 4). */
+function wrap<Schema extends z.ZodType>(schema: Schema): GiriInputSchema<z.infer<Schema>> {
     return defineInputSchema<z.infer<Schema>>({
         validate(value) {
             const result = schema.safeParse(value);
@@ -22,7 +22,7 @@ function wrap<Schema extends z.ZodType>(schema: Schema): GuriInputSchema<z.infer
  *
  * ```ts
  * import { z } from 'zod';
- * import { zod } from 'guri/validators/zod';
+ * import { zod } from 'giri/validators/zod';
  *
  * // JSON body
  * export const body = zod.body({ json: z.object({ name: z.string().min(1) }) });
@@ -37,18 +37,18 @@ function wrap<Schema extends z.ZodType>(schema: Schema): GuriInputSchema<z.infer
 export const zod = {
     body<Map extends Partial<Record<BodyContentType, z.ZodType>>>(
         map: Map,
-    ): GuriBodySchema<{ [K in keyof Map]: Map[K] extends z.ZodType ? z.infer<Map[K]> : never }> {
-        const contents = {} as Record<BodyContentType, GuriInputSchema>;
+    ): GiriBodySchema<{ [K in keyof Map]: Map[K] extends z.ZodType ? z.infer<Map[K]> : never }> {
+        const contents = {} as Record<BodyContentType, GiriInputSchema>;
         for (const [contentType, schema] of Object.entries(map)) {
             if (schema) {
                 contents[contentType as BodyContentType] = wrap(schema);
             }
         }
-        return defineBodySchema(contents) as unknown as GuriBodySchema<{
+        return defineBodySchema(contents) as unknown as GiriBodySchema<{
             [K in keyof Map]: Map[K] extends z.ZodType ? z.infer<Map[K]> : never;
         }>;
     },
-    query<Schema extends z.ZodType>(schema: Schema): GuriInputSchema<z.infer<Schema>> {
+    query<Schema extends z.ZodType>(schema: Schema): GiriInputSchema<z.infer<Schema>> {
         return wrap(schema);
     },
 };

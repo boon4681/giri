@@ -1,10 +1,10 @@
 import { join } from 'node:path';
 import type { ScannedRoute } from '../routes';
-import type { GuriPaths } from '../types';
+import type { GiriPaths } from '../types';
 import { GENERATED_HEADER, importPath, typeFilePath, writeGenerated } from './util';
 
 /** Emits `routes.d.ts`: a `RouteParams` map keyed by `"METHOD path"` for the whole app. */
-export async function writeRouteTypes(paths: GuriPaths, routes: ScannedRoute[]): Promise<void> {
+export async function writeRouteTypes(paths: GiriPaths, routes: ScannedRoute[]): Promise<void> {
     const file = join(paths.outDir, 'routes.d.ts');
     const lines = [
         GENERATED_HEADER,

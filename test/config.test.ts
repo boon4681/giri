@@ -16,7 +16,7 @@ describe('config schema', () => {
                 '@/*': ['src/*'],
                 '@db': 'src/db.ts',
             },
-            outDir: '.guri',
+            outDir: '.giri',
             server: {
                 port: 3000,
             },

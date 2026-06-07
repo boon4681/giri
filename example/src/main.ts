@@ -1,4 +1,4 @@
-import type { Services } from "guri";
+import type { Services } from "giri";
 
 export const init = () => {
     return { a: 5 }

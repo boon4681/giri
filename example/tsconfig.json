@@ -1,5 +1,5 @@
 {
-    "extends": "./.guri/tsconfig.json",
+    "extends": "./.giri/tsconfig.json",
     "compilerOptions": {
         "target": "ES2022",
         "lib": [

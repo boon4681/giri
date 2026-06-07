@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "rootDirs": [
+      "..",
+      "./types"
+    ],
+    "paths": {
+      "$guri/*": [
+        "./*"
+      ],
+      "$db": [
+        "../src/db.ts"
+      ]
+    },
+    "plugins": [
+      {
+        "name": "guri/tsc"
+      }
+    ]
+  },
+  "include": [
+    "../src",
+    "../guri.config.ts",
+    "./types/**/*.d.ts"
+  ]
+}

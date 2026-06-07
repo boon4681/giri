@@ -1,7 +1,7 @@
 node_modules
 
 # Output
-.guri
+.giri
 dist
 test/.tmp
 .output

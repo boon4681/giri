@@ -12,7 +12,7 @@ export interface ModuleGraph {
 const toSlash = (path: string): string => path.split(sep).join('/');
 
 const isProjectModule = (id: string, root: string): boolean => {
-    return id.startsWith(root) && !id.includes(`${sep}node_modules${sep}`) && !id.includes(`${sep}.guri${sep}`);
+    return id.startsWith(root) && !id.includes(`${sep}node_modules${sep}`) && !id.includes(`${sep}.giri${sep}`);
 }
 
 export const buildModuleGraph = (cwd: string): ModuleGraph => {
@@ -69,7 +69,7 @@ export const purgeModules = (files: Set<string>): void => {
 };
 
 /**
- * Drop every cached module under the project root (skipping `node_modules` and `.guri`).
+ * Drop every cached module under the project root (skipping `node_modules` and `.giri`).
  */
 export const purgeProjectModules = (cwd: string): void => {
     const root = resolve(cwd) + sep;

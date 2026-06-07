@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { prepareRequestInput } from '../src/validation';
 import { zod } from '../src/validators/zod';
 
-const url = 'http://guri.test/users';
+const url = 'http://giri.test/users';
 
 function jsonRequest(payload: unknown): Request {
     return new Request(url, {

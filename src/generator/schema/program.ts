@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import type { GuriPaths } from '../../types';
+import type { GiriPaths } from '../../types';
 
 const DEFAULT_OPTIONS: ts.CompilerOptions = {
     target: ts.ScriptTarget.ES2022,
@@ -15,7 +15,7 @@ const DEFAULT_OPTIONS: ts.CompilerOptions = {
  * `tsconfig.json` (so `paths`, `rootDirs`, and the user's TS settings apply). The
  * walker reads types from this program; nothing is emitted.
  */
-export function createSchemaProgram(paths: GuriPaths, routeFiles: string[]): ts.Program {
+export function createSchemaProgram(paths: GiriPaths, routeFiles: string[]): ts.Program {
     let options: ts.CompilerOptions = { ...DEFAULT_OPTIONS };
 
     const configPath = ts.findConfigFile(paths.cwd, ts.sys.fileExists, 'tsconfig.json');

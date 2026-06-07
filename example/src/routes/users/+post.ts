@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { zod } from "guri/validators/zod";
-import { stack } from "guri";
+import { zod } from "giri/validators/zod";
+import { stack } from "giri";
 import type { POST } from "./$types";
 import { createUser } from "../../db";
 import { auth } from "../../auth";

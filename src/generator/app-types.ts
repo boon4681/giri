@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import type { GuriPaths } from '../types';
+import type { GiriPaths } from '../types';
 import { GENERATED_HEADER, slash, writeGenerated } from './util';
 
 const MAIN_EXTENSIONS = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'];
@@ -23,7 +23,7 @@ function moduleSpecifier(fromDir: string, target: string): string {
     return path;
 }
 
-export async function writeAppTypes(paths: GuriPaths): Promise<void> {
+export async function writeAppTypes(paths: GiriPaths): Promise<void> {
     const file = join(paths.outDir, 'types', 'app.d.ts');
     const mainFile = findMainFile(paths.cwd);
 
@@ -38,7 +38,7 @@ export async function writeAppTypes(paths: GuriPaths): Promise<void> {
         [
             GENERATED_HEADER,
             'declare global {',
-            '  namespace Guri {',
+            '  namespace Giri {',
             '    interface Register {',
             `      app: typeof import(${JSON.stringify(spec)}) extends {`,
             '        init: (...args: any[]) => infer R;',

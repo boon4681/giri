@@ -1,12 +1,12 @@
 import { join } from 'node:path';
-import { resolveGuriTypesImport } from '../src/typescript-plugin-core';
+import { resolveGiriTypesImport } from '../src/typescript-plugin-core';
 
 describe('typescript plugin resolution', () => {
-    it('maps route-local ./$types imports to generated .guri types', () => {
+    it('maps route-local ./$types imports to generated .giri types', () => {
         const projectDir = join(process.cwd(), 'test', '.tmp', 'plugin');
         const generated = join(
             projectDir,
-            '.guri',
+            '.giri',
             'types',
             'routes',
             'users',
@@ -16,7 +16,7 @@ describe('typescript plugin resolution', () => {
             '$types.d.ts',
         );
 
-        const resolved = resolveGuriTypesImport({
+        const resolved = resolveGiriTypesImport({
             moduleName: './$types',
             projectDir,
             containingFile: join(
@@ -36,7 +36,7 @@ describe('typescript plugin resolution', () => {
     });
 
     it('ignores non-$types imports', () => {
-        const resolved = resolveGuriTypesImport({
+        const resolved = resolveGiriTypesImport({
             moduleName: './db',
             projectDir: process.cwd(),
             containingFile: join(process.cwd(), 'src', 'routes', '+get.ts'),

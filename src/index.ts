@@ -1,4 +1,4 @@
-import type { GuriConfig } from './types';
+import type { GiriConfig } from './types';
 
 export {
     composeMiddleware,
@@ -13,29 +13,29 @@ export {
 export {
     defineBodySchema,
     defineInputSchema,
-    isGuriBodySchema,
-    isGuriInputSchema,
+    isGiriBodySchema,
+    isGiriInputSchema,
     prepareRequestInput,
 } from './validation';
-export { buildGuriApp, resolveGuriPaths } from './app';
+export { buildGiriApp, resolveGiriPaths } from './app';
 export { scanRoutes } from './routes';
 export { syncProject } from './generator';
 export { loadLifecycle, runInit } from './lifecycle';
-export type { GuriLifecycle } from './lifecycle';
+export type { GiriLifecycle } from './lifecycle';
 export type {
     BodyContentType,
     Context,
-    GuriAdapter,
-    GuriBodySchema,
-    GuriConfig,
-    GuriFetchHandler,
-    GuriInputSchema,
-    GuriPaths,
-    GuriRequest,
-    GuriRouteRegistration,
-    GuriServeOptions,
-    GuriServer,
-    GuriServerInfo,
+    GiriAdapter,
+    GiriBodySchema,
+    GiriConfig,
+    GiriFetchHandler,
+    GiriInputSchema,
+    GiriPaths,
+    GiriRequest,
+    GiriRouteRegistration,
+    GiriServeOptions,
+    GiriServer,
+    GiriServerInfo,
     Handle,
     HandlerResponse,
     HttpMethod,
@@ -63,6 +63,6 @@ export type {
     VarsOf,
 } from './types';
 
-export function defineConfig<App>(config: GuriConfig<App>): GuriConfig<App> {
+export function defineConfig<App>(config: GiriConfig<App>): GiriConfig<App> {
     return config;
 }

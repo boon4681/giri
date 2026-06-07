@@ -5,7 +5,7 @@ import type { Services } from './types';
 
 const MAIN_EXTENSIONS = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'];
 
-export interface GuriLifecycle {
+export interface GiriLifecycle {
     /** Absolute path to the resolved `src/main.ts`, if one exists. */
     file?: string;
     /** Runtime startup: build the app's service container, awaited before serving. */
@@ -28,7 +28,7 @@ function resolveMainFile(cwd: string): string | undefined {
  * Load the optional `src/main.ts` lifecycle module. Absent file ⇒ empty lifecycle
  * (serve immediately). `init`/`teardown` are validated to be functions if present.
  */
-export async function loadLifecycle(cwd = process.cwd()): Promise<GuriLifecycle> {
+export async function loadLifecycle(cwd = process.cwd()): Promise<GiriLifecycle> {
     const file = resolveMainFile(resolve(cwd));
     if (!file) {
         return {};
@@ -38,9 +38,9 @@ export async function loadLifecycle(cwd = process.cwd()): Promise<GuriLifecycle>
     try {
         const resolved = require.resolve(file);
         delete require.cache[resolved];
-        const loaded = require(resolved) as Partial<GuriLifecycle>;
+        const loaded = require(resolved) as Partial<GiriLifecycle>;
 
-        const lifecycle: GuriLifecycle = { file };
+        const lifecycle: GiriLifecycle = { file };
         if (loaded.init !== undefined) {
             if (typeof loaded.init !== 'function') {
                 throw new Error(`${file}: "init" must be a function.`);
@@ -60,7 +60,7 @@ export async function loadLifecycle(cwd = process.cwd()): Promise<GuriLifecycle>
 }
 
 /** Run `init()` once and normalize its result into a service container. */
-export async function runInit(lifecycle: GuriLifecycle): Promise<Services> {
+export async function runInit(lifecycle: GiriLifecycle): Promise<Services> {
     if (!lifecycle.init) {
         return {} as Services;
     }

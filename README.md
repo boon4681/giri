@@ -1,18 +1,18 @@
-# Guri
+# Giri
 
-<img width="128" src="https://raw.githubusercontent.com/boon4681/guri/refs/heads/main/.image/logo.png" />
+<img width="128" src="https://raw.githubusercontent.com/boon4681/giri/refs/heads/main/.image/logo.png" />
 
 A stupid attempt from a stupid man who lack of foresight trying to make a backend framework.
 
-## Why does guri exist?
-Because I can, and I am too lazy to write an OpenAPI spec. Write handlers, return values. Guri infers the OpenAPI spec from the handlers, and generates types for params and `openapi.json` from them. Runs on Hono.
+## Why does giri exist?
+Because I can, and I am too lazy to write an OpenAPI spec. Write handlers, return values. Giri infers the OpenAPI spec from the handlers, and generates types for params and `openapi.json` from them. Runs on Hono.
 
 > Status: early and experimental. Hono is the only adapter today; the API will change.
 
 ## Install
 
 ```sh
-yarn add guri hono @hono/node-server zod
+yarn add giri hono @hono/node-server zod
 ```
 
 `hono`, `@hono/node-server`, `zod`, `valibot`, and `typescript` are optional peers — install
@@ -21,9 +21,9 @@ only what you use.
 ## Quick start
 
 ```sh
-npx guri init     # scaffold guri.config.ts + src/routes + tsconfig + .gitignore
-npx guri sync     # generate .guri/ (manifest, param types, openapi.json)
-npx guri serve    # sync, then run the dev server (watches src/ and re-syncs)
+npx giri init     # scaffold giri.config.ts + src/routes + tsconfig + .gitignore
+npx giri sync     # generate .giri/ (manifest, param types, openapi.json)
+npx giri serve    # sync, then run the dev server (watches src/ and re-syncs)
 ```
 
 Then hit it:
@@ -34,17 +34,17 @@ curl http://localhost:3000/
 
 ## Config
 
-`guri.config.ts` is declarative — it is loaded at build time, so keep it cheap and free of
+`giri.config.ts` is declarative — it is loaded at build time, so keep it cheap and free of
 side effects (no DB drivers here; see [Lifecycle](#lifecycle)).
 
 ```ts
-import { defineConfig } from "guri";
-import { hono } from "guri/adapters/hono";
+import { defineConfig } from "giri";
+import { hono } from "giri/adapters/hono";
 
 export default defineConfig({
     adapter: hono(),                       // required: the backend bridge
     server: { port: 3000, hostname: "127.0.0.1" },
-    outDir: ".guri",                       // where generated output lives
+    outDir: ".giri",                       // where generated output lives
     alias: { "$db": "./src/db.ts" },       // import aliases, also written into tsconfig
 });
 ```
@@ -89,7 +89,7 @@ export const handle: Handle = (c) => {
 
 ## The context `c`
 
-Guri owns `c`, so the return type is the schema on every backend:
+Giri owns `c`, so the return type is the schema on every backend:
 
 - `c.json(data, status?)` / `c.text(text, status?)` — return value carries the status in its type.
 - `c.params` — typed from the folder path.
@@ -100,14 +100,14 @@ Guri owns `c`, so the return type is the schema on every backend:
 
 ## Inputs
 
-Outputs are inferred; inputs are declared with a **wrapped** schema so guri gets both runtime
-validation and a JSON Schema for the doc. Wrappers live in `guri/validators/zod` and
-`guri/validators/valibot`.
+Outputs are inferred; inputs are declared with a **wrapped** schema so giri gets both runtime
+validation and a JSON Schema for the doc. Wrappers live in `giri/validators/zod` and
+`giri/validators/valibot`.
 
 ```ts
 // src/routes/users/+post.ts
 import { z } from "zod";
-import { zod } from "guri/validators/zod";
+import { zod } from "giri/validators/zod";
 import type { POST } from "./$types";
 
 export const body = zod.body({
@@ -126,7 +126,7 @@ runtime. An unwrapped schema is rejected at build time.
 
 ## Middleware
 
-Middleware use guri's `(c, next)` shape and live in two places:
+Middleware use giri's `(c, next)` shape and live in two places:
 
 - **Broad:** `export const middleware` in a folder's `+shared.ts` — applies to the whole subtree.
 - **Precise:** `export const middleware` in a verb file — applies to that one verb.
@@ -137,7 +137,7 @@ downstream handlers. Run order: inherited `+shared.ts` (root to leaf), then the 
 
 ```ts
 // src/routes/+shared.ts
-import { stack } from "guri";
+import { stack } from "giri";
 import type { Middleware } from "./$types";
 
 const requestId: Middleware<{ requestId: string }> = async (c, next) => {
@@ -154,7 +154,7 @@ uses it shows the scheme, a public route does not.
 
 ```ts
 // src/auth.ts
-import { defineMiddleware } from "guri";
+import { defineMiddleware } from "giri";
 
 export const auth = defineMiddleware<{ userId: string }>(
     {
@@ -176,11 +176,11 @@ or a `+shared.ts`). Hidden routes still serve normally.
 ## Lifecycle
 
 `src/main.ts` is the optional home for imperative startup — opening pools, validating env,
-graceful shutdown. Guri owns the serve and calls these hooks; the adapter still binds the port.
+graceful shutdown. Giri owns the serve and calls these hooks; the adapter still binds the port.
 
 ```ts
 // src/main.ts
-import type { Services } from "guri";
+import type { Services } from "giri";
 
 export const init = () => {
     // leave init unannotated — its return type is the source of truth for c.app
@@ -200,16 +200,16 @@ handler as a typed `c.app`, inferred from `init`'s return — no declaration nee
 
 | Command | What it does |
 | --- | --- |
-| `guri init` | Scaffold `guri.config.ts`, a starter route, tsconfig paths, and `.gitignore`. |
-| `guri sync` | Scan `src/routes` and regenerate `.guri/` (manifest, param types, `openapi.json`). |
-| `guri serve` | `sync`, run `init()`, then serve via the adapter. Watches `src/` and re-syncs. |
-| `guri build` | Planned — currently a no-op. |
+| `giri init` | Scaffold `giri.config.ts`, a starter route, tsconfig paths, and `.gitignore`. |
+| `giri sync` | Scan `src/routes` and regenerate `.giri/` (manifest, param types, `openapi.json`). |
+| `giri serve` | `sync`, run `init()`, then serve via the adapter. Watches `src/` and re-syncs. |
+| `giri build` | Planned — currently a no-op. |
 
-`guri serve` flags: `--port <n>`, `--host <addr>`, `--no-watch`.
+`giri serve` flags: `--port <n>`, `--host <addr>`, `--no-watch`.
 
-## Generated output (`.guri/`)
+## Generated output (`.giri/`)
 
-Everything derived lives in `.guri/` at the project root: param `.d.ts` per route, the route
+Everything derived lives in `.giri/` at the project root: param `.d.ts` per route, the route
 manifest, and the assembled `openapi.json`. It is gitignored and rebuilt on demand — never edit
 it, only import from it.
 

@@ -1,6 +1,6 @@
-# Guri Example
+# Giri Example
 
-This is a tiny Hono-backed guri app using file routes under `src/routes`.
+This is a tiny Hono-backed giri app using file routes under `src/routes`.
 
 From this directory:
 

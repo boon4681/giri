@@ -1,6 +1,6 @@
 import { dirname } from 'node:path';
 import type { RouteParam } from '../routes';
-import type { GuriPaths, HttpMethod } from '../types';
+import type { GiriPaths, HttpMethod } from '../types';
 import { GENERATED_HEADER, moduleSpecifier, typeFilePath, writeGenerated } from './util';
 
 export interface TypeFolder {
@@ -36,7 +36,7 @@ function varsType(typesDir: string, sharedFiles: string[]): string {
     return sharedFiles
         .map((file) => {
             const spec = JSON.stringify(moduleSpecifier(typesDir, file));
-            return `(typeof import(${spec}) extends { middleware: infer M } ? import("guri").InferStackVars<M> : {})`;
+            return `(typeof import(${spec}) extends { middleware: infer M } ? import("giri").InferStackVars<M> : {})`;
         })
         .join('\n    & ');
 }
@@ -44,13 +44,13 @@ function varsType(typesDir: string, sharedFiles: string[]): string {
 function methodExports(typesDir: string, verbs: TypeFolder['verbs']): string[] {
     return verbs.map(({ method, file }) => {
         const spec = JSON.stringify(moduleSpecifier(typesDir, file));
-        const input = `import("guri").RouteInputOf<typeof import(${spec})>`;
-        const vars = `Vars & import("guri").MiddlewareVarsOf<typeof import(${spec})>`;
-        return `export type ${method} = import("guri").Handle<Params, ${input}, ${vars}>;`;
+        const input = `import("giri").RouteInputOf<typeof import(${spec})>`;
+        const vars = `Vars & import("giri").MiddlewareVarsOf<typeof import(${spec})>`;
+        return `export type ${method} = import("giri").Handle<Params, ${input}, ${vars}>;`;
     });
 }
 
-export async function writeParamTypes(paths: GuriPaths, folders: TypeFolder[]): Promise<void> {
+export async function writeParamTypes(paths: GiriPaths, folders: TypeFolder[]): Promise<void> {
     for (const { dir, params, sharedFiles, verbs } of folders) {
         const file = typeFilePath(paths, dir);
         const typesDir = dirname(file);
@@ -60,9 +60,9 @@ export async function writeParamTypes(paths: GuriPaths, folders: TypeFolder[]): 
             'export type RouteParams = Params;',
             `type Vars = ${varsType(typesDir, sharedFiles)};`,
             'export type Middleware<Injects extends Record<string, unknown> = {}> =',
-            '  import("guri").Middleware<Params, import("guri").ValidatedInput, Injects>;',
-            'export type Handle<Input extends import("guri").ValidatedInput = import("guri").ValidatedInput> =',
-            '  import("guri").Handle<Params, Input, Vars>;',
+            '  import("giri").Middleware<Params, import("giri").ValidatedInput, Injects>;',
+            'export type Handle<Input extends import("giri").ValidatedInput = import("giri").ValidatedInput> =',
+            '  import("giri").Handle<Params, Input, Vars>;',
         ];
         if (verbs.length > 0) {
             lines.push(...methodExports(typesDir, verbs));

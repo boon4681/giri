@@ -45,9 +45,9 @@ export const safeRegister = async () => {
 }
 
 export const load = async () => {
-    const defaultTsConfigExists = existsSync(resolve('guri.config.ts'));
-    const defaultJsConfigExists = existsSync(resolve('guri.config.js'));
-    const defaultConfigPath = defaultTsConfigExists ? 'guri.config.ts' : defaultJsConfigExists ? 'guri.config.js' : undefined
+    const defaultTsConfigExists = existsSync(resolve('giri.config.ts'));
+    const defaultJsConfigExists = existsSync(resolve('giri.config.js'));
+    const defaultConfigPath = defaultTsConfigExists ? 'giri.config.ts' : defaultJsConfigExists ? 'giri.config.js' : undefined
     if (!defaultConfigPath) {
         log.error("Config file not found.")
         exit(1)

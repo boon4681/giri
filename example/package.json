@@ -1,8 +1,8 @@
 {
-    "name": "@guri/example-demo",
+    "name": "@giri/example-demo",
     "private": true,
     "type": "module",
-    "description": "TypeScript Hono demo for guri file routing and OpenAPI generation.",
+    "description": "TypeScript Hono demo for giri file routing and OpenAPI generation.",
     "scripts": {
         "sync": "node ../dist/cli.js sync",
         "dev": "node ../dist/cli.js serve",
@@ -13,7 +13,7 @@
     },
     "dependencies": {
         "@hono/node-server": "^2.0.3",
-        "guri": "link:..",
+        "giri": "link:..",
         "hono": "^4.12.18",
         "zod": "^4.4.3"
     },

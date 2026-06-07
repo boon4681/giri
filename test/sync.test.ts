@@ -16,7 +16,7 @@ describe('syncProject', () => {
 
     it('emits a manifest and param types per route folder', async () => {
         const routesDir = join(tmp, 'src', 'routes');
-        const outDir = join(tmp, '.guri');
+        const outDir = join(tmp, '.giri');
         await mkdir(join(routesDir, 'users', '[id]'), { recursive: true });
         await writeFile(join(routesDir, '+get.ts'), 'export const handle = () => new Response();');
         await writeFile(join(routesDir, 'users', '[id]', '+get.ts'), 'export const handle = () => new Response();');
@@ -38,7 +38,7 @@ describe('syncProject', () => {
         );
         expect(types).toContain('"id": string;');
         expect(types).toContain('export type Handle<Input');
-        expect(types).toContain('import("guri").Handle<Params, Input, Vars>');
+        expect(types).toContain('import("giri").Handle<Params, Input, Vars>');
         expect(types).toContain('export type Middleware<Injects');
 
         const tsconfig = await readFile(join(outDir, 'tsconfig.json'), 'utf8');
@@ -47,19 +47,19 @@ describe('syncProject', () => {
         expect(tsconfig).toContain('"./types"');
         expect(tsconfig).toContain('"include"');
         expect(tsconfig).toContain('"../src"');
-        expect(tsconfig).toContain('"../guri.config.ts"');
-        expect(tsconfig).toContain('"$guri/*"');
+        expect(tsconfig).toContain('"../giri.config.ts"');
+        expect(tsconfig).toContain('"$giri/*"');
         expect(tsconfig).toContain('"./*"');
         expect(tsconfig).toContain('"@/*"');
         expect(tsconfig).toContain('"../src/*"');
         expect(tsconfig).toContain('"@db"');
         expect(tsconfig).toContain('"../src/db.ts"');
-        expect(tsconfig).toContain('"guri/tsc"');
+        expect(tsconfig).toContain('"giri/tsc"');
     });
 
     it('generates params that TypeScript can use to reject wrong keys', async () => {
         const routesDir = join(tmp, 'src', 'routes');
-        const outDir = join(tmp, '.guri');
+        const outDir = join(tmp, '.giri');
         await mkdir(join(routesDir, 'users', '[id]'), { recursive: true });
         await writeFile(
             join(routesDir, 'users', '[id]', '+get.ts'),
@@ -83,7 +83,7 @@ describe('syncProject', () => {
             rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
             baseUrl: process.cwd(),
             paths: {
-                guri: ['src/index.ts'],
+                giri: ['src/index.ts'],
             },
             types: ['node'],
         });
@@ -93,13 +93,13 @@ describe('syncProject', () => {
 
     it('infers the body from a verb file (single direct, multi discriminated) via the method handle', async () => {
         const routesDir = join(tmp, 'src', 'routes');
-        const outDir = join(tmp, '.guri');
+        const outDir = join(tmp, '.giri');
         await mkdir(join(routesDir, 'users'), { recursive: true });
         await writeFile(
             join(routesDir, 'users', '+post.ts'),
             [
                 'import { z } from "zod";',
-                'import { zod } from "guri/validators/zod";',
+                'import { zod } from "giri/validators/zod";',
                 'import type { POST } from "./$types";',
                 '',
                 'export const body = zod.body({',
@@ -127,8 +127,8 @@ describe('syncProject', () => {
             rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
             baseUrl: process.cwd(),
             paths: {
-                guri: ['src/index.ts'],
-                'guri/validators/zod': ['src/validators/zod.ts'],
+                giri: ['src/index.ts'],
+                'giri/validators/zod': ['src/validators/zod.ts'],
             },
             types: ['node'],
         });
@@ -138,12 +138,12 @@ describe('syncProject', () => {
 
     it("folds a verb file's own middleware vars into its method handle c.get", async () => {
         const routesDir = join(tmp, 'src', 'routes');
-        const outDir = join(tmp, '.guri');
+        const outDir = join(tmp, '.giri');
         await mkdir(join(routesDir, 'users'), { recursive: true });
         await writeFile(
             join(routesDir, 'users', '+post.ts'),
             [
-                'import { stack } from "guri";',
+                'import { stack } from "giri";',
                 'import type { POST, Middleware } from "./$types";',
                 '',
                 'const auth: Middleware<{ userId: string }> = async (c, next) => {',
@@ -169,7 +169,7 @@ describe('syncProject', () => {
             skipLibCheck: true,
             rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
             baseUrl: process.cwd(),
-            paths: { guri: ['src/index.ts'] },
+            paths: { giri: ['src/index.ts'] },
             types: ['node'],
         });
         const diagnostics = ts.getPreEmitDiagnostics(program);
@@ -178,12 +178,12 @@ describe('syncProject', () => {
 
     it('propagates folder middleware vars into a downstream handler c.get', async () => {
         const routesDir = join(tmp, 'src', 'routes');
-        const outDir = join(tmp, '.guri');
+        const outDir = join(tmp, '.giri');
         await mkdir(join(routesDir, 'admin'), { recursive: true });
         await writeFile(
             join(routesDir, '+shared.ts'),
             [
-                'import { stack } from "guri";',
+                'import { stack } from "giri";',
                 'import type { Middleware } from "./$types";',
                 'const auth: Middleware<{ user: string }> = async (c, next) => {',
                 '  c.set("user", "ada");',
@@ -216,7 +216,7 @@ describe('syncProject', () => {
                 skipLibCheck: true,
                 rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
                 baseUrl: process.cwd(),
-                paths: { guri: ['src/index.ts'] },
+                paths: { giri: ['src/index.ts'] },
                 types: ['node'],
             },
         );

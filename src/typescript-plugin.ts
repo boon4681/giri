@@ -1,5 +1,5 @@
 import type * as ts from 'typescript/lib/tsserverlibrary';
-import { resolveGuriTypesImport } from './typescript-plugin-core';
+import { resolveGiriTypesImport } from './typescript-plugin-core';
 
 type ResolveModuleNames = NonNullable<ts.LanguageServiceHost['resolveModuleNames']>;
 
@@ -17,7 +17,7 @@ function init(modules: { typescript: typeof ts }): ts.server.PluginModule {
                     : undefined;
 
                 return moduleNames.map((moduleName, index) => {
-                    const resolved = resolveGuriTypesImport({
+                    const resolved = resolveGiriTypesImport({
                         moduleName,
                         containingFile,
                         projectDir: info.project.getCurrentDirectory(),

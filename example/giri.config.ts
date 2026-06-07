@@ -1,5 +1,5 @@
-import { defineConfig } from "guri";
-import { hono } from "guri/adapters/hono";
+import { defineConfig } from "giri";
+import { hono } from "giri/adapters/hono";
 
 export default defineConfig({
     adapter: hono(),

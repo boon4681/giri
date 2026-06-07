@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 
-export interface ResolveGuriTypesImportOptions {
+export interface ResolveGiriTypesImportOptions {
     moduleName: string;
     containingFile: string;
     projectDir: string;
@@ -57,7 +57,7 @@ function rootDirsByKind(projectDir: string, rootDirs: readonly string[] | undefi
         const absolute = absolutePath(projectDir, rootDir);
         const normalized = normalize(absolute);
         if (
-            normalized.includes(`${sep}.guri${sep}`) ||
+            normalized.includes(`${sep}.giri${sep}`) ||
             normalized.endsWith(`${sep}types${sep}routes`)
         ) {
             generatedRoots.push(normalized);
@@ -69,7 +69,7 @@ function rootDirsByKind(projectDir: string, rootDirs: readonly string[] | undefi
     return { routeRoots, generatedRoots };
 }
 
-export function resolveGuriTypesImport(options: ResolveGuriTypesImportOptions): string | undefined {
+export function resolveGiriTypesImport(options: ResolveGiriTypesImportOptions): string | undefined {
     if (
         options.moduleName !== './$types' &&
         options.moduleName !== './$types.d.ts'
@@ -88,8 +88,8 @@ export function resolveGuriTypesImport(options: ResolveGuriTypesImportOptions): 
         ...fromRootDirs.routeRoots,
     ]);
     const generatedRoots = unique([
-        ...(inferred ? [join(inferred.projectRoot, '.guri', 'types', 'routes')] : []),
-        join(options.projectDir, '.guri', 'types', 'routes'),
+        ...(inferred ? [join(inferred.projectRoot, '.giri', 'types', 'routes')] : []),
+        join(options.projectDir, '.giri', 'types', 'routes'),
         ...fromRootDirs.generatedRoots,
     ]);
 

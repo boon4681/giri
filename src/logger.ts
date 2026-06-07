@@ -1,6 +1,6 @@
 /**
  * A tiny, dependency-free logger styled after Vite's dev output:
- * `HH:MM:SS [guri] (scope) message`. Colors auto-disable for non-TTY output, `NO_COLOR`,
+ * `HH:MM:SS [giri] (scope) message`. Colors auto-disable for non-TTY output, `NO_COLOR`,
  * or `TERM=dumb`, so piped/CI logs stay clean.
  */
 
@@ -37,7 +37,7 @@ function timestamp(): string {
     return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 }
 
-const TAG = 'guri';
+const TAG = 'giri';
 
 function line(tag: string, message: string, scope?: string): string {
     const parts = [color.gray(timestamp()), tag];

@@ -1,7 +1,7 @@
 import {
     type BodyContentType,
-    type GuriBodySchema,
-    type GuriInputSchema,
+    type GiriBodySchema,
+    type GiriInputSchema,
     type InputValidationResult,
     type RouteInput,
     type TypedResponse,
@@ -24,17 +24,17 @@ interface FailedInput {
 export type PreparedRequestInput = PreparedInput | FailedInput;
 
 /**
- * Build a guri input schema from a `validate` + `toJsonSchema` pair. Vendor adapters use
+ * Build a giri input schema from a `validate` + `toJsonSchema` pair. Vendor adapters use
  * this; you can call it directly to make a custom validator. The brand is a global symbol,
- * so a hand-rolled `{ [Symbol.for("guri.input-schema")]: true, validate, toJsonSchema }` works too.
+ * so a hand-rolled `{ [Symbol.for("giri.input-schema")]: true, validate, toJsonSchema }` works too.
  */
 export function defineInputSchema<Output>(
-    schema: Omit<GuriInputSchema<Output>, typeof inputSchemaBrand>,
-): GuriInputSchema<Output> {
+    schema: Omit<GiriInputSchema<Output>, typeof inputSchemaBrand>,
+): GiriInputSchema<Output> {
     return { [inputSchemaBrand]: true, ...schema };
 }
 
-export function isGuriInputSchema(value: unknown): value is GuriInputSchema {
+export function isGiriInputSchema(value: unknown): value is GiriInputSchema {
     return Boolean(
         value &&
             typeof value === 'object' &&
@@ -43,15 +43,15 @@ export function isGuriInputSchema(value: unknown): value is GuriInputSchema {
 }
 
 /**
- * Build a guri body schema from per-content-type input schemas. Validator adapters use this `zod.body({ json, form })`
+ * Build a giri body schema from per-content-type input schemas. Validator adapters use this `zod.body({ json, form })`
  */
 export function defineBodySchema<Outputs extends Partial<Record<BodyContentType, unknown>>>(
-    contents: GuriBodySchema<Outputs>['contents'],
-): GuriBodySchema<Outputs> {
+    contents: GiriBodySchema<Outputs>['contents'],
+): GiriBodySchema<Outputs> {
     return { [bodySchemaBrand]: true, contents };
 }
 
-export function isGuriBodySchema(value: unknown): value is GuriBodySchema {
+export function isGiriBodySchema(value: unknown): value is GiriBodySchema {
     return Boolean(
         value &&
             typeof value === 'object' &&
@@ -117,13 +117,13 @@ function queryObject(url: URL): Record<string, string | string[]> {
 }
 
 async function runValidation(
-    schema: GuriInputSchema,
+    schema: GiriInputSchema,
     value: unknown,
     label: string,
 ): Promise<InputValidationResult> {
-    if (!isGuriInputSchema(schema)) {
+    if (!isGiriInputSchema(schema)) {
         throw new Error(
-            `guri: ${label} schema must be wrapped with a validator, e.g. \`export const ${label} = zod(...)\` from guri/validators/zod.`,
+            `giri: ${label} schema must be wrapped with a validator, e.g. \`export const ${label} = zod(...)\` from giri/validators/zod.`,
         );
     }
     return schema.validate(value);
@@ -149,7 +149,7 @@ export async function prepareRequestInput(request: Request, input?: RouteInput):
     }
 
     if (input?.body) {
-        const contents = input.body.contents as Record<BodyContentType, GuriInputSchema>;
+        const contents = input.body.contents as Record<BodyContentType, GiriInputSchema>;
         const declared = Object.keys(contents) as BodyContentType[];
         const requested = contentTypeFromHeader(request.headers.get('content-type'));
         // Pick the schema matching the request's content-type; fall back to JSON when the

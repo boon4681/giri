@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { buildModuleGraph, collectDependents, purgeModules, purgeProjectModules } from '../loader/module-loader';
 import type { ScannedRoute } from '../routes';
-import type { GuriConfig } from '../types';
+import type { GiriConfig } from '../types';
 import { writeManifest } from './manifest';
 import { writeOpenApi } from './openapi';
 import { extractRouteMeta } from './route-meta';
@@ -18,7 +18,7 @@ export interface WatchUpdater {
 }
 
 export function createWatchUpdater(
-    config: Pick<GuriConfig, 'alias' | 'outDir'>,
+    config: Pick<GiriConfig, 'alias' | 'outDir'>,
     initial: SyncResult,
 ): WatchUpdater {
     const paths = initial.paths;

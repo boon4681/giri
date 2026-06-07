@@ -1,7 +1,7 @@
 import { registerAliasResolver } from '../app';
 import { safeRegister } from '../loader/loader';
 import type { ScannedRoute } from '../routes';
-import type { GuriConfig, GuriPaths, Middleware, SecurityRequirement } from '../types';
+import type { GiriConfig, GiriPaths, Middleware, SecurityRequirement } from '../types';
 import { bodyToJsonSchemas, inputToJsonSchema, type RouteInputSchemas } from './inputs';
 
 export interface RouteSecurity {
@@ -128,8 +128,8 @@ function collectSecurity(
  * actually applied to the route (folder chain + verb, honoring `skipInherited`).
  */
 export async function extractRouteMeta(
-    config: Pick<GuriConfig, 'alias'>,
-    paths: GuriPaths,
+    config: Pick<GiriConfig, 'alias'>,
+    paths: GiriPaths,
     routes: ScannedRoute[],
 ): Promise<Map<string, RouteMeta>> {
     const byFile = new Map<string, RouteMeta>();

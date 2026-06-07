@@ -1,8 +1,8 @@
 import { join, resolve } from 'node:path';
-import type { GuriConfig, GuriPaths } from '../types';
+import type { GiriConfig, GiriPaths } from '../types';
 import { relativeConfigPath, writeJson } from './util';
 
-function normalizeAlias(alias: GuriConfig['alias'], paths: GuriPaths): Record<string, string[]> {
+function normalizeAlias(alias: GiriConfig['alias'], paths: GiriPaths): Record<string, string[]> {
     const result: Record<string, string[]> = {};
     for (const [key, value] of Object.entries(alias ?? {})) {
         const targets = Array.isArray(value) ? value : [value];
@@ -16,8 +16,8 @@ function normalizeAlias(alias: GuriConfig['alias'], paths: GuriPaths): Record<st
     return result;
 }
 
-/** Emits the `.guri/tsconfig.json` the project extends: rootDirs merge, aliases, plugin. */
-export async function writeTsConfig(paths: GuriPaths, config: Pick<GuriConfig, 'alias'>): Promise<void> {
+/** Emits the `.giri/tsconfig.json` the project extends: rootDirs merge, aliases, plugin. */
+export async function writeTsConfig(paths: GiriPaths, config: Pick<GiriConfig, 'alias'>): Promise<void> {
     const file = join(paths.outDir, 'tsconfig.json');
     await writeJson(file, {
         compilerOptions: {
@@ -26,19 +26,19 @@ export async function writeTsConfig(paths: GuriPaths, config: Pick<GuriConfig, '
                 './types',
             ],
             paths: {
-                // The tsconfig lives in outDir, so `$guri/*` maps to its own folder.
-                '$guri/*': ['./*'],
+                // The tsconfig lives in outDir, so `$giri/*` maps to its own folder.
+                '$giri/*': ['./*'],
                 ...normalizeAlias(config.alias, paths),
             },
             plugins: [
                 {
-                    name: 'guri/tsc',
+                    name: 'giri/tsc',
                 },
             ],
         },
         include: [
             relativeConfigPath(paths.outDir, join(paths.cwd, 'src')),
-            relativeConfigPath(paths.outDir, join(paths.cwd, 'guri.config.ts')),
+            relativeConfigPath(paths.outDir, join(paths.cwd, 'giri.config.ts')),
             './types/**/*.d.ts',
         ],
     });

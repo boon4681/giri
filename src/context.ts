@@ -116,7 +116,7 @@ export async function composeMiddleware(
 
     const dispatch = async (i: number): Promise<HandlerResponse | void> => {
         if (i <= index) {
-            throw new Error('next() called multiple times in guri middleware.');
+            throw new Error('next() called multiple times in giri middleware.');
         }
         index = i;
 

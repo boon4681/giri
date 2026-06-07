@@ -16,7 +16,7 @@ describe('createWatchUpdater', () => {
 
     it('updates a verb content edit incrementally without regenerating $types', async () => {
         const routesDir = join(tmp, 'src', 'routes');
-        const outDir = join(tmp, '.guri');
+        const outDir = join(tmp, '.giri');
         await mkdir(join(routesDir, 'users'), { recursive: true });
         const verb = join(routesDir, 'users', '+post.ts');
         await writeFile(verb, 'export const handle = (c) => c.json({ ok: true }, 201);');
@@ -42,7 +42,7 @@ describe('createWatchUpdater', () => {
 
     it('treats a non-route source file (an imported helper) as a full sync', async () => {
         const routesDir = join(tmp, 'src', 'routes');
-        const outDir = join(tmp, '.guri');
+        const outDir = join(tmp, '.giri');
         await mkdir(routesDir, { recursive: true });
         await writeFile(join(tmp, 'src', 'auth.ts'), 'export const auth = () => {};');
         await writeFile(join(routesDir, '+get.ts'), 'export const handle = (c) => c.json({ ok: true });');
@@ -55,7 +55,7 @@ describe('createWatchUpdater', () => {
 
     it('falls back to a full sync when the platform reports no filename', async () => {
         const routesDir = join(tmp, 'src', 'routes');
-        const outDir = join(tmp, '.guri');
+        const outDir = join(tmp, '.giri');
         await mkdir(routesDir, { recursive: true });
         await writeFile(join(routesDir, '+get.ts'), 'export const handle = (c) => c.json({ ok: true });');
 
