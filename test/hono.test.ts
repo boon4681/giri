@@ -324,4 +324,81 @@ describe('hono adapter', () => {
             /only run on the Hono adapter/,
         );
     });
+
+    it('supports hono-style context methods: html, redirect, body, notFound, header, status', async () => {
+        const adapter = hono();
+        const app = adapter.createApp();
+
+        adapter.register(app, {
+            method: 'GET',
+            path: '/html',
+            middleware: [],
+            handle: (c) => c.html('<h1>hi</h1>'),
+        });
+        adapter.register(app, {
+            method: 'GET',
+            path: '/go',
+            middleware: [],
+            handle: (c) => c.redirect('/login'),
+        });
+        adapter.register(app, {
+            method: 'GET',
+            path: '/raw',
+            middleware: [],
+            handle: (c) => c.body('bytes', 201, { 'content-type': 'application/octet-stream' }),
+        });
+        adapter.register(app, {
+            method: 'GET',
+            path: '/missing',
+            middleware: [],
+            handle: (c) => c.notFound(),
+        });
+        // c.header set in middleware must land on the handler's json response.
+        adapter.register(app, {
+            method: 'GET',
+            path: '/headed',
+            middleware: [
+                async (c, next) => {
+                    c.header('x-powered-by', 'giri');
+                    await next();
+                },
+            ],
+            handle: (c) => c.json({ ok: true }),
+        });
+        // c.status sets the default status used by text() when no status arg is given.
+        adapter.register(app, {
+            method: 'GET',
+            path: '/teapot',
+            middleware: [],
+            handle: (c) => {
+                c.status(418);
+                return c.text('teapot');
+            },
+        });
+
+        const html = await adapter.fetch(app, new Request('http://giri.test/html'));
+        expect(html.status).toBe(200);
+        expect(html.headers.get('content-type')).toContain('text/html');
+        await expect(html.text()).resolves.toBe('<h1>hi</h1>');
+
+        const go = await adapter.fetch(app, new Request('http://giri.test/go'));
+        expect(go.status).toBe(302);
+        expect(go.headers.get('location')).toBe('/login');
+
+        const raw = await adapter.fetch(app, new Request('http://giri.test/raw'));
+        expect(raw.status).toBe(201);
+        expect(raw.headers.get('content-type')).toBe('application/octet-stream');
+        await expect(raw.text()).resolves.toBe('bytes');
+
+        const missing = await adapter.fetch(app, new Request('http://giri.test/missing'));
+        expect(missing.status).toBe(404);
+
+        const headed = await adapter.fetch(app, new Request('http://giri.test/headed'));
+        expect(headed.headers.get('x-powered-by')).toBe('giri');
+        await expect(headed.json()).resolves.toEqual({ ok: true });
+
+        const teapot = await adapter.fetch(app, new Request('http://giri.test/teapot'));
+        expect(teapot.status).toBe(418);
+        await expect(teapot.text()).resolves.toBe('teapot');
+    });
 });

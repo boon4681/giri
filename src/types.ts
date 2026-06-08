@@ -2,7 +2,7 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS'
 
 export type StatusCode = number;
 
-export type ResponseFormat = 'json' | 'text';
+export type ResponseFormat = 'json' | 'text' | 'html';
 
 export const typedResponseBrand: unique symbol = Symbol.for('giri.typed-response') as never;
 export const nativeContextBrand: unique symbol = Symbol.for('giri.native-context') as never;
@@ -97,6 +97,27 @@ export interface Context<
         status?: S,
         headers?: HeadersInit,
     ): TypedResponse<string, S, 'text'>;
+    /** An HTML response (`text/html`). Like `text`, the body is a string. */
+    html<S extends StatusCode = 200>(
+        html: string,
+        status?: S,
+        headers?: HeadersInit,
+    ): TypedResponse<string, S, 'html'>;
+    /** A raw-body response - string, stream, buffer, FormData, … (not documented in OpenAPI). */
+    body(data: BodyInit | null, status?: StatusCode, headers?: HeadersInit): Response;
+    /** Alias of `body`, mirroring Hono's `c.newResponse`. */
+    newResponse(data: BodyInit | null, status?: StatusCode, headers?: HeadersInit): Response;
+    /** A redirect (defaults to 302) with the `Location` header set. */
+    redirect(location: string, status?: StatusCode): Response;
+    /** A 404 Not Found response. */
+    notFound(): Response;
+    /**
+     * Set a response header applied to whatever this handler returns. Pass `{ append: true }` to add
+     * another value (e.g. `Set-Cookie`); omit `value` to delete. Mirrors Hono's `c.header`.
+     */
+    header(name: string, value?: string, options?: { append?: boolean }): void;
+    /** Default status for `body`/`redirect`, and for `json`/`text`/`html` when no status arg is given. */
+    status(code: StatusCode): void;
 }
 
 export type Handle<

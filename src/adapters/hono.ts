@@ -35,7 +35,7 @@ async function routeHandler(honoContext: HonoContext, route: GiriRouteRegistrati
         native: honoContext,
     });
     const result = await composeMiddleware(route.middleware, route.handle, context);
-    return toResponse(result);
+    return toResponse(result, context);
 }
 
 function syncHonoVars(honoContext: HonoContext, giriContext: GiriContext): void {

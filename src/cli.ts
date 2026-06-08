@@ -158,9 +158,7 @@ async function missingDeps(cwd: string, candidates: string[]): Promise<string[]>
     let pkg: Record<string, unknown> = {};
     try {
         pkg = JSON.parse(await readFile(join(cwd, 'package.json'), 'utf8')) as Record<string, unknown>;
-    } catch {
-        // No/!valid package.json — treat everything as missing (init already guards this case).
-    }
+    } catch {}
 
     const present = new Set<string>();
     for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {

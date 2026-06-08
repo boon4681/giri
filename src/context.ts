@@ -14,6 +14,18 @@ import {
 
 const BODYLESS_STATUS = new Set([101, 103, 204, 205, 304]);
 
+/** Imperative response state set via `c.header()` / `c.status()`, merged in `toResponse`. */
+interface PendingResponse {
+    headers: Headers;
+    status?: StatusCode;
+}
+
+const pendingResponseBrand: unique symbol = Symbol('giri.pending-response');
+
+function getPending(context: Context): PendingResponse | undefined {
+    return (context as unknown as Record<symbol, PendingResponse | undefined>)[pendingResponseBrand];
+}
+
 export interface CreateContextOptions<
     Params extends Record<string, string> = Record<string, string>,
     Input extends ValidatedInput = ValidatedInput,
@@ -52,6 +64,10 @@ export function createContext<
     const store = new Map<string, unknown>();
     const validated = options.validated ?? ({} as Input);
 
+    // Headers/status set imperatively via c.header()/c.status(); merged into the final response.
+    const pending: PendingResponse = { headers: new Headers() };
+    const defaultStatus = (): StatusCode => pending.status ?? 200;
+
     const context: Context<Params, Input> = {
         params: options.params ?? ({} as Params),
         app: options.app ?? ({} as Services),
@@ -75,13 +91,35 @@ export function createContext<
             store.set(key, value);
         },
         get: (key: string) => store.get(key) as never,
-        json: (data, status = 200 as never, headers) =>
-            createTypedResponse(data, status, 'json', headers),
-        text: (text, status = 200 as never, headers) =>
-            createTypedResponse(text, status, 'text', headers),
+        json: (data, status, headers) =>
+            createTypedResponse(data, (status ?? defaultStatus()) as never, 'json', headers),
+        text: (text, status, headers) =>
+            createTypedResponse(text, (status ?? defaultStatus()) as never, 'text', headers),
+        html: (html, status, headers) =>
+            createTypedResponse(html, (status ?? defaultStatus()) as never, 'html', headers),
+        body: (data, status, headers) =>
+            new Response(data, { status: status ?? defaultStatus(), headers }),
+        newResponse: (data, status, headers) =>
+            new Response(data, { status: status ?? defaultStatus(), headers }),
+        redirect: (location, status) =>
+            new Response(null, { status: status ?? 302, headers: { Location: location } }),
+        notFound: () => new Response('404 Not Found', { status: 404 }),
+        header: (name, value, options) => {
+            if (value === undefined) {
+                pending.headers.delete(name);
+            } else if (options?.append) {
+                pending.headers.append(name, value);
+            } else {
+                pending.headers.set(name, value);
+            }
+        },
+        status: (code) => {
+            pending.status = code;
+        },
     };
-    
+
     (context as unknown as Record<symbol, unknown>)[nativeContextBrand] = options.native;
+    (context as unknown as Record<symbol, unknown>)[pendingResponseBrand] = pending;
 
     return context;
 }
@@ -97,6 +135,10 @@ export function typedResponseToResponse(response: TypedResponse<unknown>): Respo
         headers.set('content-type', 'text/plain; charset=utf-8');
     }
 
+    if (response.format === 'html' && !headers.has('content-type')) {
+        headers.set('content-type', 'text/html; charset=utf-8');
+    }
+
     const body = BODYLESS_STATUS.has(response.status)
         ? null
         : response.format === 'json'
@@ -109,8 +151,33 @@ export function typedResponseToResponse(response: TypedResponse<unknown>): Respo
     });
 }
 
-export function toResponse(response: HandlerResponse): Response {
-    return isTypedResponse(response) ? typedResponseToResponse(response) : response;
+/**
+ * Convert a handler's return value to a real `Response`, then merge any headers set imperatively via
+ * `c.header()` (the response's own headers win; pending ones fill the gaps). Pass the `context` so
+ * those imperative headers are applied; without it the response is returned unchanged.
+ */
+export function toResponse(response: HandlerResponse, context?: Context): Response {
+    const base = isTypedResponse(response) ? typedResponseToResponse(response) : response;
+    const pending = context ? getPending(context) : undefined;
+    if (!pending) {
+        return base;
+    }
+
+    let hasPending = false;
+    pending.headers.forEach(() => {
+        hasPending = true;
+    });
+    if (!hasPending) {
+        return base;
+    }
+
+    const headers = new Headers(base.headers);
+    pending.headers.forEach((value, key) => {
+        if (!headers.has(key)) {
+            headers.set(key, value);
+        }
+    });
+    return new Response(base.body, { status: base.status, statusText: base.statusText, headers });
 }
 
 export async function composeMiddleware(
