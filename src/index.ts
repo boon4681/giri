@@ -25,6 +25,10 @@ export type { GiriLifecycle } from './lifecycle';
 export type {
     BodyContentType,
     Context,
+    CookieJar,
+    CookieJarFactory,
+    CookieOptions,
+    CookieSink,
     GiriAdapter,
     GiriBodySchema,
     GiriConfig,

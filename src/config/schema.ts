@@ -12,4 +12,5 @@ export const configSchema = Type.Object({
         hostname: Type.Optional(Type.String()),
     }, { additionalProperties: false })),
     errorSchema: Type.Optional(Type.Any()),
+    cookieSecret: Type.Optional(Type.String()),
 }, { additionalProperties: false })

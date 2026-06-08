@@ -1,4 +1,6 @@
 import {
+    type CookieJar,
+    type CookieJarFactory,
     type Services,
     type Context,
     type HandlerResponse,
@@ -26,6 +28,20 @@ function getPending(context: Context): PendingResponse | undefined {
     return (context as unknown as Record<symbol, PendingResponse | undefined>)[pendingResponseBrand];
 }
 
+/** Used when the active adapter provides no cookie jar; every cookie call throws. */
+const unsupportedCookieJar: CookieJar = {
+    get: cookiesUnsupported,
+    all: cookiesUnsupported,
+    set: cookiesUnsupported,
+    delete: cookiesUnsupported,
+    getSigned: cookiesUnsupported,
+    setSigned: cookiesUnsupported,
+};
+
+function cookiesUnsupported(): never {
+    throw new Error('The active adapter does not support cookies.');
+}
+
 export interface CreateContextOptions<
     Params extends Record<string, string> = Record<string, string>,
     Input extends ValidatedInput = ValidatedInput,
@@ -36,6 +52,10 @@ export interface CreateContextOptions<
     app?: Services;
     /** The adapter's native per-request context, stashed for backend-specific bridges. */
     native?: unknown;
+    /** Secret for `c.signedCookie` / `c.req.signedCookie` (from `config.cookieSecret`). */
+    cookieSecret?: string;
+    /** The adapter's cookie jar, built from its runtime's native helpers. */
+    cookies?: CookieJarFactory;
 }
 
 export function createTypedResponse<
@@ -68,6 +88,17 @@ export function createContext<
     const pending: PendingResponse = { headers: new Headers() };
     const defaultStatus = (): StatusCode => pending.status ?? 200;
 
+    // Cookies are a runtime concern: the adapter owns reading/encoding/signing via its native
+    // helpers. Core only hands it the sink (request in, Set-Cookie onto the pending response).
+    // No adapter jar => cookies aren't supported, and using them throws.
+    const cookies: CookieJar = options.cookies
+        ? options.cookies({
+              request: options.request,
+              append: (header) => pending.headers.append('set-cookie', header),
+              secret: options.cookieSecret,
+          })
+        : unsupportedCookieJar;
+
     const context: Context<Params, Input> = {
         params: options.params ?? ({} as Params),
         app: options.app ?? ({} as Services),
@@ -86,6 +117,9 @@ export function createContext<
                 }
                 return validated[key];
             },
+            cookie: (name) => cookies.get(name),
+            cookies: () => cookies.all(),
+            signedCookie: (name) => cookies.getSigned(name),
         },
         set: (key: string, value: unknown) => {
             store.set(key, value);
@@ -116,6 +150,14 @@ export function createContext<
         status: (code) => {
             pending.status = code;
         },
+        cookie: (name, value, options) => {
+            if (value === null) {
+                cookies.delete(name, options);
+            } else {
+                cookies.set(name, value, options);
+            }
+        },
+        signedCookie: (name, value, options) => cookies.setSigned(name, value, options),
     };
 
     (context as unknown as Record<symbol, unknown>)[nativeContextBrand] = options.native;
@@ -173,10 +215,18 @@ export function toResponse(response: HandlerResponse, context?: Context): Respon
 
     const headers = new Headers(base.headers);
     pending.headers.forEach((value, key) => {
+        // Set-Cookie is multi-valued; forEach coalesces it into one comma-joined string, so
+        // handle it separately below to keep each cookie its own header.
+        if (key === 'set-cookie') {
+            return;
+        }
         if (!headers.has(key)) {
             headers.set(key, value);
         }
     });
+    for (const cookie of pending.headers.getSetCookie?.() ?? []) {
+        headers.append('set-cookie', cookie);
+    }
     return new Response(base.body, { status: base.status, statusText: base.statusText, headers });
 }
 

@@ -34,6 +34,46 @@ export interface ValidatedInput {
     query?: unknown;
 }
 
+/** Attributes for a `Set-Cookie` header. `path` defaults to `/`. */
+export interface CookieOptions {
+    domain?: string;
+    path?: string;
+    /** Lifetime in seconds. */
+    maxAge?: number;
+    expires?: Date;
+    httpOnly?: boolean;
+    secure?: boolean;
+    sameSite?: 'Strict' | 'Lax' | 'None' | 'strict' | 'lax' | 'none';
+    partitioned?: boolean;
+    priority?: 'Low' | 'Medium' | 'High' | 'low' | 'medium' | 'high';
+}
+
+/**
+ * Cookie read/write, implemented per adapter with its runtime's native helpers. giri core
+ * supplies the {@link CookieSink} (where to read from / write to); the adapter owns encoding.
+ */
+export interface CookieJar {
+    get(name: string): string | undefined;
+    all(): Record<string, string>;
+    set(name: string, value: string, options?: CookieOptions): void;
+    delete(name: string, options?: CookieOptions): void;
+    getSigned(name: string): Promise<string | false | undefined>;
+    setSigned(name: string, value: string, options?: CookieOptions): Promise<void>;
+}
+
+/** What core hands an adapter's cookie jar: the request to read from, the response sink to write to. */
+export interface CookieSink {
+    /** The incoming request, for reading the `Cookie` header. */
+    request: Request;
+    /** Append one already-serialized `Set-Cookie` header value to the response. */
+    append(setCookieHeader: string): void;
+    /** The configured `cookieSecret`, if any (for signed cookies). */
+    secret?: string;
+}
+
+/** Builds a {@link CookieJar} bound to one request's {@link CookieSink}. Each adapter provides one. */
+export type CookieJarFactory = (sink: CookieSink) => CookieJar;
+
 export interface GiriRequest<Input extends ValidatedInput = ValidatedInput> {
     raw: Request;
     url: URL;
@@ -44,6 +84,16 @@ export interface GiriRequest<Input extends ValidatedInput = ValidatedInput> {
     arrayBuffer(): Promise<ArrayBuffer>;
     formData(): Promise<FormData>;
     valid<K extends keyof Input & ('body' | 'query')>(key: K): Input[K];
+    /** Read a request cookie by name, or `undefined` if absent. */
+    cookie(name: string): string | undefined;
+    /** All request cookies as a name→value map. */
+    cookies(): Record<string, string>;
+    /**
+     * Read and verify a signed cookie. Resolves to the original value, `false` if the
+     * signature was tampered with, or `undefined` if the cookie is absent. Requires
+     * `cookieSecret` in `giri.config`.
+     */
+    signedCookie(name: string): Promise<string | false | undefined>;
 }
 
 declare global {
@@ -118,6 +168,13 @@ export interface Context<
     header(name: string, value?: string, options?: { append?: boolean }): void;
     /** Default status for `body`/`redirect`, and for `json`/`text`/`html` when no status arg is given. */
     status(code: StatusCode): void;
+    /**
+     * Set a response cookie via `Set-Cookie`. Pass `value: null` to delete it (send the
+     * same `path`/`domain` you set it with). Stacks with other cookies set this request.
+     */
+    cookie(name: string, value: string | null, options?: CookieOptions): void;
+    /** Set an HMAC-signed cookie. Requires `cookieSecret` in `giri.config`. */
+    signedCookie(name: string, value: string, options?: CookieOptions): Promise<void>;
 }
 
 export type Handle<
@@ -273,6 +330,8 @@ export interface GiriRouteRegistration {
     input?: RouteInput;
     /** App-wide services to seed onto `c.app` (same instance for every route). */
     services?: Services;
+    /** Secret for signing/verifying cookies (`c.signedCookie`), from `config.cookieSecret`. */
+    cookieSecret?: string;
 }
 
 export type GiriFetchHandler = (req: Request) => Response | Promise<Response>;
@@ -317,6 +376,8 @@ export interface GiriConfig<App = unknown> {
         hostname?: string;
     };
     errorSchema?: unknown;
+    /** Secret used to sign/verify cookies via `c.signedCookie` / `c.req.signedCookie`. */
+    cookieSecret?: string;
 }
 
 export interface GiriPaths {

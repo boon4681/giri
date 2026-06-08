@@ -1,6 +1,7 @@
 import { serve as serveNode } from '@hono/node-server';
 import { Hono } from 'hono';
 import type { Context as HonoContext, ContextVariableMap, MiddlewareHandler } from 'hono';
+import { parse, parseSigned, serialize, serializeSigned } from 'hono/utils/cookie';
 import {
     composeMiddleware,
     createContext,
@@ -11,12 +12,34 @@ import {
 import { nativeContextBrand } from '../types';
 import type {
     Context as GiriContext,
+    CookieJarFactory,
     GiriAdapter,
     GiriRouteRegistration,
     Middleware,
     ValidatedInput,
 } from '../types';
 import { prepareRequestInput } from '../validation';
+
+const honoCookieJar: CookieJarFactory = ({ request, append, secret }) => {
+    const header = request.headers.get('cookie') ?? '';
+    const requireSecret = (): string => {
+        if (!secret) {
+            throw new Error('Signed cookies require `cookieSecret` in giri.config.');
+        }
+        return secret;
+    };
+
+    return {
+        get: (name) => parse(header, name)[name],
+        all: () => parse(header),
+        set: (name, value, options) => append(serialize(name, value, options)),
+        delete: (name, options) =>
+            append(serialize(name, '', { ...options, maxAge: 0, expires: new Date(0) })),
+        getSigned: async (name) => (await parseSigned(header, requireSecret(), name))[name],
+        setSigned: async (name, value, options) =>
+            append(await serializeSigned(name, value, requireSecret(), options)),
+    };
+};
 
 export type HonoGiriApp = Hono;
 export type HonoContextVars = { [K in keyof ContextVariableMap]: ContextVariableMap[K] };
@@ -33,6 +56,8 @@ async function routeHandler(honoContext: HonoContext, route: GiriRouteRegistrati
         validated: prepared.validated,
         app: route.services,
         native: honoContext,
+        cookieSecret: route.cookieSecret,
+        cookies: honoCookieJar,
     });
     const result = await composeMiddleware(route.middleware, route.handle, context);
     return toResponse(result, context);

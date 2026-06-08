@@ -311,6 +311,77 @@ describe('hono adapter', () => {
         expect(redirected.headers.get('location')).toBe('https://login.example/start');
     });
 
+    it('reads, sets, and signs cookies through Hono\'s native cookie helpers', async () => {
+        const adapter = hono();
+        const app = adapter.createApp();
+
+        adapter.register(app, {
+            method: 'GET',
+            path: '/echo',
+            middleware: [],
+            handle: (c) => {
+                c.cookie('seen', c.req.cookie('sid') ?? 'none', { path: '/', httpOnly: true });
+                return c.json({ all: c.req.cookies() });
+            },
+        });
+        adapter.register(app, {
+            method: 'GET',
+            path: '/sign',
+            middleware: [],
+            cookieSecret: 'topsecret',
+            handle: async (c) => {
+                await c.signedCookie('token', 'abc');
+                return c.json({ ok: true });
+            },
+        });
+        adapter.register(app, {
+            method: 'GET',
+            path: '/verify',
+            middleware: [],
+            cookieSecret: 'topsecret',
+            handle: async (c) => c.json({ token: await c.req.signedCookie('token') }),
+        });
+        // Signs with a different secret: the signature is well-formed but won't verify.
+        adapter.register(app, {
+            method: 'GET',
+            path: '/sign-wrong',
+            middleware: [],
+            cookieSecret: 'other-secret',
+            handle: async (c) => {
+                await c.signedCookie('token', 'abc');
+                return c.json({ ok: true });
+            },
+        });
+
+        const echo = await adapter.fetch(
+            app,
+            new Request('http://giri.test/echo', { headers: { cookie: 'sid=42; lang=th' } }),
+        );
+        expect(echo.status).toBe(200);
+        await expect(echo.json()).resolves.toEqual({ all: { sid: '42', lang: 'th' } });
+        const setCookie = echo.headers.getSetCookie();
+        expect(setCookie).toHaveLength(1);
+        expect(setCookie[0]).toContain('seen=42');
+        expect(setCookie[0]).toContain('HttpOnly');
+
+        // The signed cookie Hono writes verifies through Hono's own getSignedCookie on the way back.
+        const signed = await adapter.fetch(app, new Request('http://giri.test/sign'));
+        const pair = signed.headers.getSetCookie()[0].split(';')[0];
+        const verified = await adapter.fetch(
+            app,
+            new Request('http://giri.test/verify', { headers: { cookie: pair } }),
+        );
+        await expect(verified.json()).resolves.toEqual({ token: 'abc' });
+
+        const wrong = await adapter.fetch(app, new Request('http://giri.test/sign-wrong'));
+        const wrongPair = wrong.headers.getSetCookie()[0].split(';')[0];
+        const tampered = await adapter.fetch(
+            app,
+            new Request('http://giri.test/verify', { headers: { cookie: wrongPair } }),
+        );
+        await expect(tampered.json()).resolves.toEqual({ token: false });
+    });
+
     it('fromHono throws off the Hono adapter (no native context)', async () => {
         const bridged = fromHono(async (_c, next) => {
             await next();

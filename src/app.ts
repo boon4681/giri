@@ -244,6 +244,7 @@ export async function buildGiriApp<App>(
                 middleware: [...folderMiddleware, ...verbMiddleware],
                 input: routeInput(routeModule, route.file),
                 services: options.services,
+                cookieSecret: config.cookieSecret,
             });
         }
     } finally {
