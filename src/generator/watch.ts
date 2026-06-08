@@ -1,6 +1,12 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { buildModuleGraph, collectDependents, purgeModules, purgeProjectModules } from '../loader/module-loader';
+import {
+    buildModuleGraph,
+    collectDependents,
+    purgeGeneratedModules,
+    purgeModules,
+    purgeProjectModules,
+} from '../loader/module-loader';
 import type { ScannedRoute } from '../routes';
 import type { GiriConfig } from '../types';
 import { writeManifest } from './manifest';
@@ -32,6 +38,7 @@ export function createWatchUpdater(
         data.inputsByFile = result.data.inputsByFile;
         data.securityByFile = result.data.securityByFile;
         data.hiddenFiles = result.data.hiddenFiles;
+        purgeGeneratedModules(paths.outDir);
         return 'full';
     };
 
@@ -96,6 +103,7 @@ export function createWatchUpdater(
             }
             await writeManifest(paths, routes, data);
             await writeOpenApi(paths, routes, data);
+            purgeGeneratedModules(paths.outDir);
             return 'incremental';
         },
     };

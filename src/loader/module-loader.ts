@@ -79,3 +79,12 @@ export const purgeProjectModules = (cwd: string): void => {
         }
     }
 };
+
+export const purgeGeneratedModules = (outDir: string): void => {
+    const root = resolve(outDir) + sep;
+    for (const id of Object.keys(require.cache)) {
+        if (resolve(id).startsWith(root)) {
+            delete require.cache[id];
+        }
+    }
+};

@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { createWatchUpdater, syncProject } from '../src/generator';
 
@@ -38,6 +39,29 @@ describe('createWatchUpdater', () => {
 
         expect(await updater.apply('routes/users/+get.ts')).toBe('full');
         expect(existsSync(typesFile)).toBe(true);
+    });
+
+    it('purges the openapi.json require-cache so a rebuild serves the fresh spec', async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const outDir = join(tmp, '.giri');
+        await mkdir(join(routesDir, 'secret'), { recursive: true });
+        const verb = join(routesDir, 'secret', '+get.ts');
+        await writeFile(verb, 'export const handle = (c) => c.json({ ok: true });');
+
+        const initial = await syncProject({ outDir }, { cwd: tmp });
+        const updater = createWatchUpdater({ outDir }, initial);
+
+        const requireJson = createRequire(join(tmp, 'noop.js'));
+        const openapiPath = join(outDir, 'openapi.json');
+        const before = requireJson(openapiPath) as { paths?: Record<string, { get?: unknown }> };
+        expect(before.paths?.['/secret']?.get).toBeDefined();
+        await writeFile(
+            verb,
+            'export const openapi = false;\nexport const handle = (c) => c.json({ ok: true });',
+        );
+        expect(await updater.apply('routes/secret/+get.ts')).toBe('incremental');
+        const after = requireJson(openapiPath) as { paths?: Record<string, { get?: unknown }> };
+        expect(after.paths?.['/secret']?.get).toBeUndefined();
     });
 
     it('treats a non-route source file (an imported helper) as a full sync', async () => {
