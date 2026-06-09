@@ -222,7 +222,57 @@ describe('syncProject', () => {
         expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
     });
 
-    it("types c.get from a Hono plugin's ContextVariableMap augmentation (default fromHono Vars)", async () => {
+    it("infers c.get from a Hono middleware's own Env Variables (scoped, no generic)", async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const outDir = join(tmp, '.giri');
+        await mkdir(join(routesDir, 'me'), { recursive: true });
+        await writeFile(
+            join(routesDir, 'me', '+shared.ts'),
+            [
+                'import { fromHono } from "@boon4681/giri/adapters/hono";',
+                'import type { MiddlewareHandler } from "hono";',
+                '',
+                '// A middleware that types its own scoped Variables (Hono\'s per-handler Env scope).',
+                'const auth: MiddlewareHandler<{ Variables: { user: { id: string } } }> =',
+                '  async (_c, next) => { await next(); };',
+                '',
+                '// No generic needed - fromHono infers { user } from the handler\'s Env.',
+                'export const middleware = fromHono(auth);',
+            ].join('\n'),
+        );
+        await writeFile(
+            join(routesDir, 'me', '+get.ts'),
+            [
+                'import type { Handle } from "./$types";',
+                'export const handle: Handle = (c) => {',
+                '  const id: string = c.get("user").id;',
+                '  // @ts-expect-error user.id is a string, not a number',
+                '  const bad: number = c.get("user").id;',
+                '  return c.json({ id, bad });',
+                '};',
+            ].join('\n'),
+        );
+        await syncProject({ outDir }, { cwd: tmp });
+
+        const program = ts.createProgram([join(routesDir, 'me', '+get.ts')], {
+            target: ts.ScriptTarget.ES2022,
+            module: ts.ModuleKind.NodeNext,
+            moduleResolution: ts.ModuleResolutionKind.NodeNext,
+            strict: true,
+            skipLibCheck: true,
+            rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
+            baseUrl: process.cwd(),
+            paths: {
+                '@boon4681/giri': ['src/index.ts'],
+                '@boon4681/giri/adapters/hono': ['src/adapters/hono.ts'],
+            },
+            types: ['node'],
+        });
+        const diagnostics = ts.getPreEmitDiagnostics(program);
+        expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
+    });
+
+    it('does not leak a global ContextVariableMap augmentation onto a bare fromHono route', async () => {
         const routesDir = join(tmp, 'src', 'routes');
         const outDir = join(tmp, '.giri');
         await mkdir(join(routesDir, 'me'), { recursive: true });
@@ -231,14 +281,15 @@ describe('syncProject', () => {
             [
                 'import { fromHono } from "@boon4681/giri/adapters/hono";',
                 '',
-                '// Mimic what @hono/oauth-providers does: augment Hono\'s global ContextVariableMap.',
+                '// A plugin (e.g. @hono/oauth-providers) augments Hono\'s global ContextVariableMap',
+                '// process-wide - but it is only applied under its own folder, not here.',
                 'declare module "hono" {',
                 '  interface ContextVariableMap {',
                 '    "user-google": { email: string } | undefined;',
                 '  }',
                 '}',
                 '',
-                '// No explicit generic - fromHono defaults Vars to Hono\'s ContextVariableMap.',
+                '// A bare fromHono (like cors) injects nothing: Vars default to {}, NOT the global map.',
                 'export const middleware = fromHono(async (_c, next) => { await next(); });',
             ].join('\n'),
         );
@@ -247,10 +298,12 @@ describe('syncProject', () => {
             [
                 'import type { Handle } from "./$types";',
                 'export const handle: Handle = (c) => {',
-                '  const user = c.get("user-google");',
-                '  // @ts-expect-error user-google may be undefined (the augmented type)',
-                '  const email: string = user.email;',
-                '  return c.json({ email: c.get("user-google")?.email });',
+                '  // user-google is NOT in this route\'s middleware vars, so c.get falls back to unknown',
+                '  // rather than the leaked global augmentation.',
+                '  const user: unknown = c.get("user-google");',
+                '  // @ts-expect-error unknown is not the augmented { email } shape - no leak',
+                '  const email: string = c.get("user-google").email;',
+                '  return c.json({ ok: true, user, email });',
                 '};',
             ].join('\n'),
         );

@@ -45,6 +45,28 @@ const honoCookieJar: CookieJarFactory = ({ request, append, secret }) => {
 export type HonoGiriApp = Hono;
 export type HonoContextVars = { [K in keyof ContextVariableMap]: ContextVariableMap[K] };
 
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/**
+ * The `Variables` a single Hono middleware declares on its own `Env` (`MiddlewareHandler<{ Variables }>`).
+ * This is Hono's *scoped* var typing - unlike the global `ContextVariableMap`, it travels with the
+ * handler. A handler with no typed Variables (e.g. `cors()`, whose `Env` is `any`) contributes `{}`.
+ */
+type HonoHandlerVars<H> = H extends MiddlewareHandler<infer E>
+    ? E extends { Variables: infer V }
+        ? IsAny<V> extends true
+            ? {}
+            : V extends Record<string, unknown>
+                ? V
+                : {}
+        : {}
+    : {};
+
+/** Intersect the scoped Variables of every handler passed to `fromHono`. */
+type MergeHandlerVars<H extends readonly unknown[]> = H extends readonly [infer Head, ...infer Tail]
+    ? HonoHandlerVars<Head> & MergeHandlerVars<Tail>
+    : {};
+
 async function routeHandler(honoContext: HonoContext, route: GiriRouteRegistration): Promise<Response> {
     const prepared = await prepareRequestInput(honoContext.req.raw, route.input);
     if (!prepared.ok) {
@@ -91,18 +113,31 @@ function syncHonoVars(honoContext: HonoContext, giriContext: GiriContext): void 
  * import { googleAuth } from "@hono/oauth-providers/google";
  *
  * export const middleware = stack(
- *   fromHono(googleAuth({ client_id: …, client_secret: …, scope: ["openid", "email"] })),
+ *   fromHono(googleAuth({ client_id: …, scope: ["openid"] })),
  * );
- * // downstream handler: const user = c.get("user-google");
+ * // downstream handler (only under this folder): const user = c.get("user-google");
  * ```
  *
  * It runs the Hono middleware against the real Hono context (cookies, `c.redirect`, `c.req.query`
  * all work), then mirrors any vars it set onto giri's `c` for downstream `c.get`. Only valid on the
  * Hono adapter - throws on any other backend.
+ *
+ * Vars are inferred from each handler's own `Env["Variables"]` (Hono's scoped var typing), so a
+ * middleware typed `MiddlewareHandler<{ Variables: { … } }>` types `c.get` automatically, scoped to
+ * this folder's chain. A bare `cors()` (whose `Env` is `any`) contributes nothing.
+ *
+ * The inference deliberately does NOT read Hono's global `ContextVariableMap`: plugins augment that
+ * map process-wide (e.g. `@hono/oauth-providers` adds `user-google`), so reading it would leak every
+ * plugin's vars onto every route carrying any `fromHono` middleware. For such plugins (their handler
+ * is a bare `MiddlewareHandler`), pass the vars explicitly: `fromHono<{ "user-google": GoogleUser }>(…)`.
+ * Use `fromHono<HonoContextVars>(…)` to opt into the whole global map.
  */
-export function fromHono<Vars extends Record<string, unknown> = HonoContextVars>(
-    ...handlers: MiddlewareHandler[]
-): Middleware<Record<string, string>, ValidatedInput, Vars> {
+export function fromHono<
+    Vars extends Record<string, unknown> = never,
+    H extends MiddlewareHandler[] = MiddlewareHandler[],
+>(
+    ...handlers: H
+): Middleware<Record<string, string>, ValidatedInput, [Vars] extends [never] ? MergeHandlerVars<H> : Vars> {
     if (handlers.length === 0) {
         throw new Error('fromHono() requires at least one Hono middleware.');
     }
