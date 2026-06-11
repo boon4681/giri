@@ -228,6 +228,46 @@ yarn sync
 yarn dev
 ```
 
+## Portable runtime
+
+`@boon4681/giri/runtime` is the portable composition layer for generated integrations. It does
+not implement routing itself: it accepts a complete `GiriAdapter`, creates that adapter's app, and
+registers statically imported route modules. Hono is the supported adapter today:
+
+```ts
+import { createApp } from "@boon4681/giri/runtime";
+import { hono } from "@boon4681/giri/adapters/hono";
+import * as rootShared from "./src/routes/+shared";
+import * as usersGet from "./src/routes/users/+get";
+
+export const app = createApp({
+    adapter: hono(),
+    services: { source: "playground" },
+    routes: [
+        {
+            method: "GET",
+            path: "/api/users",
+            module: usersGet,
+            shared: [rootShared],
+        },
+    ],
+});
+```
+
+The result is a normal Fetch application:
+
+```ts
+const response = await app.fetch(new Request("https://example.test/api/users"));
+```
+
+`app` is the native Hono application, so SvelteKit or Next.js can forward a framework request
+directly to `app.fetch(request)`. This is the low-level target for virtual modules such as
+`@giri/project-1`; the Vite integration should generate the route descriptor array.
+
+The shipped Hono adapter also owns its Node server binding. A browser playground should provide a
+different `GiriAdapter` implementation whose `createApp`, `register`, `fetch`, and `serve` methods
+bind to the desired browser runtime; `createApp` itself does not special-case that environment.
+
 ## License
 
 MIT
