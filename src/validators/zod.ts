@@ -12,7 +12,9 @@ function wrap<Schema extends z.ZodType>(schema: Schema): GiriInputSchema<z.infer
                 : { ok: false, issues: result.error };
         },
         toJsonSchema() {
-            return z.toJSONSchema(schema) as Record<string, unknown>;
+            // `unrepresentable: 'any'` keeps types Zod can't render (e.g. `z.instanceof(File)`
+            // for a multipart upload) as `{}` instead of throwing the whole conversion away.
+            return z.toJSONSchema(schema, { unrepresentable: 'any' }) as Record<string, unknown>;
         },
     });
 }

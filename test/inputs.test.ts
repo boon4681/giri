@@ -23,4 +23,18 @@ describe('inputToJsonSchema', () => {
         expect(inputToJsonSchema({ type: 'string' })).toBeUndefined();
         expect(inputToJsonSchema({ safeParse() {} })).toBeUndefined();
     });
+
+    it('swallows a schema that cannot render to JSON Schema instead of throwing', () => {
+        // e.g. `z.instanceof(File)` - the route keeps its tags/security; only the body doc is lost.
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const body = defineInputSchema({
+            validate: (value) => ({ ok: true, value }),
+            toJsonSchema: () => {
+                throw new Error('Custom types cannot be represented in JSON Schema');
+            },
+        });
+        expect(() => inputToJsonSchema(body)).not.toThrow();
+        expect(inputToJsonSchema(body)).toBeUndefined();
+        warn.mockRestore();
+    });
 });

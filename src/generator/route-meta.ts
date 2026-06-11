@@ -5,6 +5,7 @@ import { safeRegister } from '../loader/loader';
 import type { ScannedRoute } from '../routes';
 import type { GiriConfig, GiriPaths, Middleware, SecurityRequirement } from '../types';
 import { bodyToJsonSchemas, inputToJsonSchema, type RouteInputSchemas } from './inputs';
+import { parseRouteOpenApi } from './schema/route-openapi';
 
 export interface RouteSecurity {
     /** Operation-level `security` requirements, e.g. `[{ bearerAuth: [] }]`. */
@@ -426,27 +427,27 @@ function resolveOpenApi(
             hidden = false;
             return;
         }
-        if (!value || typeof value !== 'object') {
+        const parsed = parseRouteOpenApi(value);
+        if (!parsed) {
             return;
         }
-        const o = value as Record<string, unknown>;
-        if ('hidden' in o) {
-            hidden = Boolean(o.hidden);
+        if (parsed.hidden !== undefined) {
+            hidden = parsed.hidden;
         }
-        if (Array.isArray(o.tags)) {
-            tags.push(...o.tags.filter((tag): tag is string => typeof tag === 'string'));
+        if (parsed.tags) {
+            tags.push(...parsed.tags);
         }
-        if (typeof o.summary === 'string') {
-            meta.summary = o.summary;
+        if (parsed.summary !== undefined) {
+            meta.summary = parsed.summary;
         }
-        if (typeof o.description === 'string') {
-            meta.description = o.description;
+        if (parsed.description !== undefined) {
+            meta.description = parsed.description;
         }
-        if (typeof o.deprecated === 'boolean') {
-            meta.deprecated = o.deprecated;
+        if (parsed.deprecated !== undefined) {
+            meta.deprecated = parsed.deprecated;
         }
-        if (isVerb && typeof o.operationId === 'string') {
-            meta.operationId = o.operationId;
+        if (isVerb && parsed.operationId !== undefined) {
+            meta.operationId = parsed.operationId;
         }
     };
 

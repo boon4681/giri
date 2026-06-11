@@ -22,7 +22,14 @@ export function inputToJsonSchema(schema: unknown): JSONSchema | undefined {
     if (!isGiriInputSchema(schema)) {
         return undefined;
     }
-    return sanitize(schema.toJsonSchema());
+    try {
+        return sanitize(schema.toJsonSchema());
+    } catch (error) {
+        // A schema that can't be rendered to JSON Schema only costs its own request
+        // documentation - it must not discard the route's other metadata (tags/security).
+        console.warn(`giri: skipped a request schema that can't be represented as JSON Schema (${(error as Error).message}).`);
+        return undefined;
+    }
 }
 
 /**

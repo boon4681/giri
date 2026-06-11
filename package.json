@@ -1,6 +1,6 @@
 {
     "name": "@boon4681/giri",
-    "version": "0.0.3-alpha-2",
+    "version": "0.0.3-alpha-3",
     "license": "MIT",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
