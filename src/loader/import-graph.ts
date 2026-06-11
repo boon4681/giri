@@ -8,7 +8,7 @@
  * Parsing the imports ourselves makes the graph independent of runtime evaluation.
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 import { glob } from 'tinyglobby';
 import { resolveAliasRequest } from '../app';
@@ -118,11 +118,12 @@ export async function buildImportGraph(
 ): Promise<ModuleGraph> {
     const root = resolve(cwd);
     const outDir = resolve(root, config.outDir ?? '.giri') + sep;
+    const outRel = relative(root, outDir).split(sep).join('/').replace(/\/$/, '');
     const files = await glob('**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}', {
         cwd: root,
         absolute: true,
         onlyFiles: true,
-        ignore: ['**/node_modules/**'],
+        ignore: ['**/node_modules/**', '**/.git/**', outRel ? `${outRel}/**` : '.giri/**'],
     });
 
     const importers = new Map<string, Set<string>>();

@@ -20,6 +20,12 @@ import { writeRouteTypes } from './route-types';
 import type { RouteResponses } from './schema';
 import { writeTsConfig } from './tsconfig';
 import { assertSafeOutDir, pruneDir, slash, typeFilePath } from './util';
+import {
+    readSyncCache,
+    SYNC_CACHE_NAME,
+    syncFingerprint,
+    writeSyncCache,
+} from './cache';
 
 /** A `$types.d.ts` for every folder under `routes/` even empty/new ones. */
 async function typeFolders(paths: GiriPaths, routes: ScannedRoute[]): Promise<TypeFolder[]> {
@@ -77,59 +83,15 @@ async function extractResponses(paths: GiriPaths, routes: ScannedRoute[]): Promi
         // Include the generated global app.d.ts so `c.app` resolves to its real type.
         const appTypes = join(paths.outDir, 'types', 'app.d.ts');
         const roots = existsSync(appTypes) ? [...files, appTypes] : files;
-        const program = createSchemaProgram(paths, roots, { lean: true });
-        const fallbackFiles: string[] = [];
+        const program = createSchemaProgram(paths, roots);
         for (const file of files) {
-            const responses = extractRouteResponses(program, file);
-            byFile.set(file, responses);
-            if (hasLooseResponseSchema(responses)) {
-                fallbackFiles.push(file);
-            }
-        }
-        if (fallbackFiles.length > 0) {
-            const fullProgram = createSchemaProgram(
-                paths,
-                existsSync(appTypes) ? [...fallbackFiles, appTypes] : fallbackFiles,
-            );
-            for (const file of fallbackFiles) {
-                byFile.set(file, extractRouteResponses(fullProgram, file));
-            }
+            byFile.set(file, extractRouteResponses(program, file));
         }
     } catch (error) {
         console.warn(`giri: skipped response schema generation (${(error as Error).message}).`);
     }
 
     return byFile;
-}
-
-function isLooseSchema(value: unknown): boolean {
-    if (!value || typeof value !== 'object') {
-        return false;
-    }
-
-    const schema = value as Record<string, unknown>;
-    const keys = Object.keys(schema);
-    if (keys.length === 0) {
-        return true;
-    }
-    if (typeof schema.$ref === 'string') {
-        return false;
-    }
-    if (Array.isArray(schema.anyOf) && schema.anyOf.some(isLooseSchema)) {
-        return true;
-    }
-    if (schema.items && isLooseSchema(schema.items)) {
-        return true;
-    }
-    if (schema.properties && typeof schema.properties === 'object') {
-        return Object.values(schema.properties as Record<string, unknown>).some(isLooseSchema);
-    }
-
-    return false;
-}
-
-function hasLooseResponseSchema(responses: RouteResponses): boolean {
-    return responses.responses.some((response) => isLooseSchema(response.schema));
 }
 
 interface RuntimeMeta {
@@ -191,6 +153,20 @@ export async function syncProject<App>(
     const hadOutDir = existsSync(paths.outDir);
     const routes = await scanRoutes(paths.routesDir);
     const folders = await typeFolders(paths, routes);
+    const fingerprint = await syncFingerprint(config, paths);
+    const cached = await readSyncCache(paths, fingerprint);
+
+    const generatedFiles = [
+        join(paths.outDir, 'tsconfig.json'),
+        join(paths.outDir, 'manifest.json'),
+        join(paths.outDir, 'openapi.json'),
+        join(paths.outDir, 'routes.d.ts'),
+        join(paths.outDir, 'types', 'app.d.ts'),
+        ...folders.map((folder) => typeFilePath(paths, folder.dir)),
+    ];
+    if (cached && generatedFiles.every(existsSync)) {
+        return { paths, routes, folders, data: cached };
+    }
 
     await mkdir(paths.outDir, { recursive: true });
     await writeParamTypes(paths, folders);
@@ -199,11 +175,13 @@ export async function syncProject<App>(
     await writeTsConfig(paths, config);
 
     // Response schemas need the generated tsconfig + $types to resolve, so extract last.
-    const responsesByFile = await extractResponses(paths, routes);
-    const { inputsByFile, securityByFile, hiddenFiles, openapiByFile } = await extractMeta(config, paths, routes);
-    const data: SyncData = { responsesByFile, inputsByFile, securityByFile, hiddenFiles, openapiByFile };
+    const data: SyncData = cached ?? {
+        responsesByFile: await extractResponses(paths, routes),
+        ...await extractMeta(config, paths, routes),
+    };
     await writeManifest(paths, routes, data);
     await writeOpenApi(paths, routes, data);
+    await writeSyncCache(paths, fingerprint, data);
 
     if (hadOutDir) {
         await pruneDir(
@@ -213,6 +191,7 @@ export async function syncProject<App>(
                 join(paths.outDir, 'manifest.json'),
                 join(paths.outDir, 'openapi.json'),
                 join(paths.outDir, 'routes.d.ts'),
+                join(paths.outDir, SYNC_CACHE_NAME),
                 join(paths.outDir, 'types', 'app.d.ts'),
                 ...folders.map((folder) => typeFilePath(paths, folder.dir)),
             ]),

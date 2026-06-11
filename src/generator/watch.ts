@@ -12,6 +12,7 @@ import type { GiriConfig } from '../types';
 import { writeManifest } from './manifest';
 import { writeOpenApi } from './openapi';
 import { extractRouteMeta } from './route-meta';
+import { syncFingerprint, writeSyncCache } from './cache';
 import { syncProject, type SyncResult } from './sync';
 import { slash } from './util';
 
@@ -119,6 +120,7 @@ export function createWatchUpdater(
             }
             await writeManifest(paths, routes, data);
             await writeOpenApi(paths, routes, data);
+            await writeSyncCache(paths, await syncFingerprint(config, paths), data);
             purgeGeneratedModules(paths.outDir);
             return 'incremental';
         },

@@ -88,6 +88,46 @@ describe('syncProject', () => {
         expect(tsconfig).toContain('"@boon4681/giri/tsc"');
     });
 
+    it('reuses cached metadata until a project input changes', async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const outDir = join(tmp, '.giri');
+        const routeFile = join(routesDir, '+get.ts');
+        const counterKey = '__giri_sync_cache_test_loads__';
+        const state = globalThis as typeof globalThis & Record<string, number | undefined>;
+        delete state[counterKey];
+        await mkdir(routesDir, { recursive: true });
+
+        const routeSource = (suffix = '') => [
+            `const key = ${JSON.stringify(counterKey)};`,
+            'const state = globalThis as typeof globalThis & Record<string, number | undefined>;',
+            'state[key] = (state[key] ?? 0) + 1;',
+            'export const marker = state[key];',
+            'export const handle = () => new Response();',
+            suffix,
+        ].join('\n');
+
+        try {
+            await writeFile(routeFile, routeSource());
+            const initial = await syncProject({ outDir }, { cwd: tmp });
+            expect(state[counterKey]).toBe(1);
+            await expect(readFile(join(outDir, '.sync-cache.json'), 'utf8')).resolves.toContain(
+                '"version": 1',
+            );
+
+            const cached = await syncProject({ outDir }, { cwd: tmp });
+            expect(state[counterKey]).toBe(1);
+            expect(cached.data.responsesByFile.get(cached.routes[0].file)).toEqual(
+                initial.data.responsesByFile.get(initial.routes[0].file),
+            );
+
+            await writeFile(routeFile, routeSource('// changed'));
+            await syncProject({ outDir }, { cwd: tmp });
+            expect(state[counterKey]).toBe(2);
+        } finally {
+            delete state[counterKey];
+        }
+    });
+
     it('generates params that TypeScript can use to reject wrong keys', async () => {
         const routesDir = join(tmp, 'src', 'routes');
         const outDir = join(tmp, '.giri');

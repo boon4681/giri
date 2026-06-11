@@ -2,10 +2,10 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import * as prompts from '@clack/prompts';
 import { buildGiriApp, registerAliasResolver } from './app';
-import { findConfigPath, load } from './loader/loader';
+import { findConfigPath, load, safeRegister } from './loader/loader';
 import { createWatchUpdater, syncProject } from './generator';
 import { loadLifecycle, runInit } from './lifecycle';
 import { color, log, muted } from './logger';
@@ -353,18 +353,31 @@ async function serveProject(config: GiriConfig, flags: ParsedFlags): Promise<voi
     const { watch } = await import('chokidar');
     let stop: (() => Promise<void>) | undefined;
     const boot = async (cfg: GiriConfig): Promise<void> => {
-        const initial = await syncProject(cfg);
-        log.success(
-            `synced ${initial.routes.length} route${initial.routes.length === 1 ? '' : 's'} ${muted(`at ${initial.paths.outDir}`)}`,
-            'sync',
-        );
         const closers: Array<() => void | Promise<void>> = [];
-        closers.push(registerAliasResolver(cfg.alias, initial.paths.cwd));
+        closers.push(registerAliasResolver(cfg.alias, resolve(process.cwd())));
 
         const lifecycle = await loadLifecycle();
-        const services: Services = await runInit(lifecycle);
+        // Project sync and lifecycle initialization are independent. Running them together hides
+        // schema-generation time behind database connections/migrations instead of making startup
+        // pay both costs serially.
+        const sync = syncProject(cfg).then((initial) => {
+            log.success(
+                `synced ${initial.routes.length} route${initial.routes.length === 1 ? '' : 's'} ${muted(`at ${initial.paths.outDir}`)}`,
+                'sync',
+            );
+            return initial;
+        });
+        const [initial, services]: [Awaited<ReturnType<typeof syncProject>>, Services] =
+            await Promise.all([sync, runInit(lifecycle)]);
 
-        let current = await buildGiriApp(cfg, { services });
+        const loader = await safeRegister();
+        closers.push(loader.unregister);
+        let current = await buildGiriApp(cfg, {
+            services,
+            lazy: true,
+            loaderRegistered: true,
+            aliasResolverRegistered: true,
+        });
 
         const port = flags.port ?? cfg.server?.port ?? 3000;
         const hostname = flags.hostname ?? cfg.server?.hostname;
@@ -420,6 +433,9 @@ async function serveProject(config: GiriConfig, flags: ParsedFlags): Promise<voi
                                 current = await buildGiriApp(cfg, {
                                     services,
                                     dirty: fullSync ? undefined : dirtySet,
+                                    lazy: true,
+                                    loaderRegistered: true,
+                                    aliasResolverRegistered: true,
                                 });
                             }
                         }
@@ -433,9 +449,14 @@ async function serveProject(config: GiriConfig, flags: ParsedFlags): Promise<voi
                     }
                 };
 
-                const watcher = watch(srcDir, { persistent: true });
+                // ignoreInitial: boot() already built the whole project (syncProject + buildGiriApp);
+                // replaying an `add` for every existing file here would re-run a full rebuild storm and
+                // race with the config-restart below. We only want events for edits made after boot.
+                const watcher = watch(srcDir, { persistent: true, ignoreInitial: true });
+                // chokidar emits absolute paths; the updater (and its log labels) expect paths relative
+                // to the watched `src/`, matching the relative form used everywhere else.
                 const onFileChange = (filename: string): void => {
-                    changed.add(filename);
+                    changed.add(isAbsolute(filename) ? relative(srcDir, filename) : filename);
                     clearTimeout(timer);
                     timer = setTimeout(() => void flush(), 150);
                 };
@@ -493,12 +514,15 @@ async function serveProject(config: GiriConfig, flags: ParsedFlags): Promise<voi
                 restarting = false;
             }
         };
-        const configWatcher = watch(dirname(configPath), { persistent: true });
-        configWatcher.on('all', (_event, filename) => {
-            if (filename && basename(filename.toString()) === configName) {
-                clearTimeout(timer);
-                timer = setTimeout(() => void restart(), 150);
-            }
+        // Watch the config FILE directly, never its parent directory: `dirname(configPath)` is the
+        // project root, and watching that recursively would scan all of node_modules (tens of seconds
+        // on a real project) — which both stalls startup and, on Windows, starves the nested src
+        // watcher so edits stop being detected. ignoreInitial avoids a spurious restart from the
+        // initial `add` event.
+        const configWatcher = watch(configPath, { persistent: true, ignoreInitial: true });
+        configWatcher.on('all', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => void restart(), 150);
         });
     }
 

@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { createWatchUpdater, syncProject } from '../src/generator';
@@ -24,6 +24,8 @@ describe('createWatchUpdater', () => {
 
         const initial = await syncProject({ outDir }, { cwd: tmp });
         const updater = createWatchUpdater({ outDir }, initial);
+        const cacheFile = join(outDir, '.sync-cache.json');
+        const cacheBefore = await readFile(cacheFile, 'utf8');
 
         const typesFile = join(outDir, 'types', 'src', 'routes', 'users', '$types.d.ts');
         expect(existsSync(typesFile)).toBe(true);
@@ -36,6 +38,7 @@ describe('createWatchUpdater', () => {
         // Filenames are relative to the watched `src/` (the parent of routes).
         expect(await updater.apply('routes/users/+post.ts')).toBe('incremental');
         expect(existsSync(typesFile)).toBe(false);
+        expect(await readFile(cacheFile, 'utf8')).not.toBe(cacheBefore);
 
         expect(await updater.apply('routes/users/+get.ts')).toBe('full');
         expect(existsSync(typesFile)).toBe(true);

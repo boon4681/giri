@@ -59,6 +59,44 @@ describe('hono adapter', () => {
         });
     });
 
+    it('loads lazy route modules once on their first request', async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const counterKey = '__giri_lazy_route_loads__';
+        const state = globalThis as typeof globalThis & Record<string, number | undefined>;
+        delete state[counterKey];
+        await mkdir(routesDir, { recursive: true });
+        await writeFile(
+            join(routesDir, '+get.js'),
+            [
+                `const key = ${JSON.stringify(counterKey)};`,
+                'const state = globalThis;',
+                'state[key] = (state[key] ?? 0) + 1;',
+                'exports.handle = (c) => c.json({ loads: state[key] });',
+            ].join('\n'),
+        );
+
+        const config = defineConfig({ adapter: hono(), outDir: join(tmp, '.giri') });
+        try {
+            const built = await buildGiriApp(config, {
+                cwd: tmp,
+                lazy: true,
+                loaderRegistered: true,
+                aliasResolverRegistered: true,
+            });
+            expect(state[counterKey]).toBeUndefined();
+
+            const first = await config.adapter.fetch(built.app, new Request('http://giri.test/'));
+            expect(await first.json()).toEqual({ loads: 1 });
+            expect(state[counterKey]).toBe(1);
+
+            const second = await config.adapter.fetch(built.app, new Request('http://giri.test/'));
+            expect(await second.json()).toEqual({ loads: 1 });
+            expect(state[counterKey]).toBe(1);
+        } finally {
+            delete state[counterKey];
+        }
+    });
+
     it('seeds init() services into c.app for every route', async () => {
         const routesDir = join(tmp, 'src', 'routes');
         await mkdir(routesDir, { recursive: true });

@@ -2,7 +2,17 @@ import Module from 'node:module';
 import { isAbsolute, join, resolve } from 'node:path';
 import { safeRegister } from './loader/loader';
 import { scanRoutes, type ScannedRoute } from './routes';
-import type { GiriBodySchema, GiriConfig, GiriInputSchema, GiriPaths, Handle, Middleware, RouteInput, Services } from './types';
+import type {
+    GiriBodySchema,
+    GiriConfig,
+    GiriInputSchema,
+    GiriPaths,
+    GiriRouteRegistration,
+    Handle,
+    Middleware,
+    RouteInput,
+    Services,
+} from './types';
 import { isGiriBodySchema, isGiriInputSchema } from './validation';
 
 export interface BuildGiriAppOptions {
@@ -10,6 +20,12 @@ export interface BuildGiriAppOptions {
     services?: Services;
     /** Files that changed since last build — only these are purged from require.cache before loading. */
     dirty?: Set<string>;
+    /** Defer route-module evaluation until the adapter first reads its runtime fields. */
+    lazy?: boolean;
+    /** The caller owns a persistent TypeScript loader for lazy route evaluation. */
+    loaderRegistered?: boolean;
+    /** The caller owns a persistent project-alias resolver for lazy route evaluation. */
+    aliasResolverRegistered?: boolean;
 }
 
 export interface BuiltGiriApp<App> {
@@ -215,8 +231,13 @@ export async function buildGiriApp<App>(
     // Install the persistent `$giri` resolver BEFORE esbuild-register: it patches
     // `_resolveFilename` too, and its unregister() restores whatever it captured
     ensureGiriAliasResolver(paths.outDir);
-    const { unregister } = await safeRegister();
-    const unregisterAliasResolver = registerAliasResolver(config.alias, paths.cwd);
+    if (options.lazy && (!options.loaderRegistered || !options.aliasResolverRegistered)) {
+        throw new Error('Lazy route loading requires persistent loader and alias registrations.');
+    }
+    const loader = options.loaderRegistered ? undefined : await safeRegister();
+    const unregisterAliasResolver = options.aliasResolverRegistered
+        ? undefined
+        : registerAliasResolver(config.alias, paths.cwd);
 
     try {
         const dirty = options.dirty;
@@ -230,7 +251,7 @@ export async function buildGiriApp<App>(
             return sharedCache.get(file);
         };
 
-        for (const route of routes) {
+        const runtimeFor = (route: ScannedRoute): GiriRouteRegistration => {
             const routeModule = loadModule(route.file, isDirty(route.file)) as RouteModule;
             if (typeof routeModule.handle !== 'function') {
                 throw new Error(`${route.file} must export a named handle function.`);
@@ -243,7 +264,7 @@ export async function buildGiriApp<App>(
                 );
             const verbMiddleware = normalizeMiddleware(routeModule.middleware, route.file);
 
-            config.adapter.register(app, {
+            return {
                 method: route.method,
                 path: route.path,
                 handle: routeModule.handle,
@@ -251,11 +272,39 @@ export async function buildGiriApp<App>(
                 input: routeInput(routeModule, route.file),
                 services: options.services,
                 cookieSecret: config.cookieSecret,
+            };
+        };
+
+        for (const route of routes) {
+            if (!options.lazy) {
+                config.adapter.register(app, runtimeFor(route));
+                continue;
+            }
+
+            let runtime: GiriRouteRegistration | undefined;
+            const getRuntime = (): GiriRouteRegistration => {
+                runtime ??= runtimeFor(route);
+                return runtime;
+            };
+            config.adapter.register(app, {
+                method: route.method,
+                path: route.path,
+                get handle() {
+                    return getRuntime().handle;
+                },
+                get middleware() {
+                    return getRuntime().middleware;
+                },
+                get input() {
+                    return getRuntime().input;
+                },
+                services: options.services,
+                cookieSecret: config.cookieSecret,
             });
         }
     } finally {
-        unregisterAliasResolver();
-        unregister();
+        unregisterAliasResolver?.();
+        loader?.unregister();
     }
 
     return { app, routes, paths };

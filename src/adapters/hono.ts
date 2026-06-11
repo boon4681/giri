@@ -68,21 +68,21 @@ type MergeHandlerVars<H extends readonly unknown[]> = H extends readonly [infer 
     : {};
 
 async function routeHandler(honoContext: HonoContext, route: GiriRouteRegistration): Promise<Response> {
-    const prepared = await prepareRequestInput(honoContext.req.raw, route.input);
-    if (!prepared.ok) {
-        return toResponse(prepared.response);
-    }
-
-    const context = createContext({
-        request: honoContext.req.raw,
-        params: honoContext.req.param() as Record<string, string>,
-        validated: prepared.validated,
-        app: route.services,
-        native: honoContext,
-        cookieSecret: route.cookieSecret,
-        cookies: honoCookieJar,
-    });
     try {
+        const prepared = await prepareRequestInput(honoContext.req.raw, route.input);
+        if (!prepared.ok) {
+            return toResponse(prepared.response);
+        }
+
+        const context = createContext({
+            request: honoContext.req.raw,
+            params: honoContext.req.param() as Record<string, string>,
+            validated: prepared.validated,
+            app: route.services,
+            native: honoContext,
+            cookieSecret: route.cookieSecret,
+            cookies: honoCookieJar,
+        });
         const result = await composeMiddleware(route.middleware, route.handle, context);
         return toResponse(result, context);
     } catch (error) {
