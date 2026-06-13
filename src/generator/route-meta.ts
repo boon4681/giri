@@ -4,6 +4,7 @@ import { registerAliasResolver } from '../app';
 import { safeRegister } from '../loader/loader';
 import type { ScannedRoute } from '../routes';
 import type { GiriConfig, GiriPaths, Middleware, SecurityRequirement } from '../types';
+import { resolveRouteInput } from '../validation';
 import { bodyToJsonSchemas, inputToJsonSchema, type RouteInputSchemas } from './inputs';
 import { parseRouteOpenApi } from './schema/route-openapi';
 
@@ -72,10 +73,22 @@ function middlewareFunctions(value: unknown): Middleware[] {
     return [];
 }
 
-function readInput(routeModule: Record<string, unknown>): RouteInputSchemas | undefined {
+function readInput(
+    routeModule: Record<string, unknown>,
+    middleware: Middleware[],
+    label: string,
+): RouteInputSchemas | undefined {
+    const resolved = resolveRouteInput([
+        ...middleware.map((fn, index) => ({
+            label: `${label} middleware[${index}]`,
+            body: fn.body,
+            query: fn.query,
+        })),
+        { label, body: routeModule.body, query: routeModule.query },
+    ]);
     const input: RouteInputSchemas = {};
-    const body = bodyToJsonSchemas(routeModule.body);
-    const query = inputToJsonSchema(routeModule.query);
+    const body = bodyToJsonSchemas(resolved?.body);
+    const query = inputToJsonSchema(resolved?.query);
     if (body) {
         input.body = body;
     }
@@ -390,8 +403,13 @@ function extractRuntimeSharedMeta(
     loadShared: (file: string) => Record<string, unknown>,
 ): RouteMeta {
     const meta: RouteMeta = {};
+    const middleware = collectMiddleware(route, {}, loadShared);
+    const input = readInput({}, middleware, route.file);
     const security = collectSecurity(route, {}, loadShared);
     const { hidden, meta: openapi } = resolveOpenApi(route, { openapi: routeModule.openapi }, loadShared);
+    if (input) {
+        meta.input = input;
+    }
     if (security) {
         meta.security = security;
     }
@@ -467,18 +485,7 @@ function collectSecurity(
     routeModule: Record<string, unknown>,
     loadShared: (file: string) => Record<string, unknown>,
 ): RouteSecurity | undefined {
-    const skipInherited = Boolean(
-        (routeModule.config as { skipInherited?: boolean } | undefined)?.skipInherited,
-    );
-
-    const middleware: Middleware[] = [];
-    if (!skipInherited) {
-        for (const file of route.sharedFiles) {
-            middleware.push(...middlewareFunctions(loadShared(file).middleware));
-        }
-    }
-    middleware.push(...middlewareFunctions(routeModule.middleware));
-
+    const middleware = collectMiddleware(route, routeModule, loadShared);
     const security: SecurityRequirement[] = [];
     const securitySchemes: Record<string, unknown> = {};
     for (const fn of middleware) {
@@ -498,6 +505,25 @@ function collectSecurity(
     return security.length > 0 || Object.keys(securitySchemes).length > 0
         ? { security, securitySchemes }
         : undefined;
+}
+
+function collectMiddleware(
+    route: ScannedRoute,
+    routeModule: Record<string, unknown>,
+    loadShared: (file: string) => Record<string, unknown>,
+): Middleware[] {
+    const skipInherited = Boolean(
+        (routeModule.config as { skipInherited?: boolean } | undefined)?.skipInherited,
+    );
+
+    const middleware: Middleware[] = [];
+    if (!skipInherited) {
+        for (const file of route.sharedFiles) {
+            middleware.push(...middlewareFunctions(loadShared(file).middleware));
+        }
+    }
+    middleware.push(...middlewareFunctions(routeModule.middleware));
+    return middleware;
 }
 
 /**
@@ -566,7 +592,8 @@ export async function extractRouteMeta(
             try {
                 const routeModule = loadModule(route.file);
                 const meta: RouteMeta = {};
-                const input = readInput(routeModule);
+                const middleware = collectMiddleware(route, routeModule, loadShared);
+                const input = readInput(routeModule, middleware, route.file);
                 const security = collectSecurity(route, routeModule, loadShared);
                 const { hidden, meta: openapi } = resolveOpenApi(route, routeModule, loadShared);
                 if (input) {

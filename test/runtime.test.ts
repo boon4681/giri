@@ -4,6 +4,7 @@ import { join, relative } from 'node:path';
 import { hono } from '../src/adapters/hono';
 import {
     createApp,
+    defineBodySchema,
     defineInputSchema,
     defineMiddleware,
     stack,
@@ -128,6 +129,98 @@ describe('createApp', () => {
             cookieSecret: 'secret',
             input: { query },
         });
+    });
+
+    it('validates middleware-owned body and query input before middleware and exposes it downstream', async () => {
+        const query = defineInputSchema<{ page: number }>({
+            validate: (value) => {
+                const page = Number((value as { page?: string }).page);
+                return Number.isInteger(page) && page > 0
+                    ? { ok: true, value: { page } }
+                    : { ok: false, issues: { page: 'must be a positive integer' } };
+            },
+            toJsonSchema: () => ({
+                type: 'object',
+                properties: { page: { type: 'integer', minimum: 1 } },
+                required: ['page'],
+            }),
+        });
+        const json = defineInputSchema<{ term: string }>({
+            validate: (value) =>
+                typeof (value as { term?: unknown }).term === 'string'
+                    ? { ok: true, value: value as { term: string } }
+                    : { ok: false, issues: { term: 'must be a string' } },
+            toJsonSchema: () => ({
+                type: 'object',
+                properties: { term: { type: 'string' } },
+                required: ['term'],
+            }),
+        });
+        const body = defineBodySchema({ json });
+        let middlewarePage: number | undefined;
+        let middlewareTerm: string | undefined;
+        const pagination = defineMiddleware({ body, query }, async (c, next) => {
+            middlewarePage = c.req.valid('query').page;
+            middlewareTerm = c.req.valid('body').term;
+            await next();
+        });
+        const app = createApp({
+            adapter: hono(),
+            routes: [
+                {
+                    method: 'POST',
+                    path: '/search',
+                    shared: [{ middleware: pagination }],
+                    module: {
+                        handle: (c) => c.json({
+                            ...c.req.valid('query'),
+                            ...c.req.valid('body'),
+                        }),
+                    },
+                },
+            ],
+        });
+
+        const valid = await app.fetch(new Request('https://giri.test/search?page=2', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ term: 'giri' }),
+        }));
+        expect(valid.status).toBe(200);
+        expect(middlewarePage).toBe(2);
+        expect(middlewareTerm).toBe('giri');
+        await expect(valid.json()).resolves.toEqual({ page: 2, term: 'giri' });
+
+        const invalid = await app.fetch(new Request('https://giri.test/search?page=0', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ term: 'giri' }),
+        }));
+        expect(invalid.status).toBe(400);
+        expect(middlewarePage).toBe(2);
+    });
+
+    it('rejects competing validators for the same input target', () => {
+        const query = defineInputSchema({
+            validate: (value) => ({ ok: true as const, value }),
+            toJsonSchema: () => ({ type: 'object' }),
+        });
+        const pagination = defineMiddleware({ query }, async (_c, next) => next());
+
+        expect(() => createApp({
+            adapter: testAdapter(),
+            routes: [
+                {
+                    method: 'GET',
+                    path: '/search',
+                    shared: [{ middleware: pagination }],
+                    module: {
+                        query,
+                        handle: (c) => c.json({ ok: true }),
+                    },
+                },
+            ],
+        })).toThrow(/query validator conflicts/);
     });
 
     it('respects skipInherited while retaining route middleware', () => {

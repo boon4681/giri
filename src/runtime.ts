@@ -25,6 +25,7 @@ import {
     isGiriBodySchema,
     isGiriInputSchema,
     prepareRequestInput,
+    resolveRouteInput,
 } from './validation';
 
 export {
@@ -108,27 +109,6 @@ function normalizeMiddleware(
     return [...value];
 }
 
-function routeInput(route: GiriRuntimeRoute): RouteInput | undefined {
-    const input: RouteInput = {};
-    if (route.module.body !== undefined) {
-        if (!isGiriBodySchema(route.module.body)) {
-            throw new Error(
-                `${route.method} ${route.path}: body must be a wrapped Giri body schema.`,
-            );
-        }
-        input.body = route.module.body;
-    }
-    if (route.module.query !== undefined) {
-        if (!isGiriInputSchema(route.module.query)) {
-            throw new Error(
-                `${route.method} ${route.path}: query must be a wrapped Giri input schema.`,
-            );
-        }
-        input.query = route.module.query;
-    }
-    return input.body || input.query ? input : undefined;
-}
-
 function routeRegistration(
     route: GiriRuntimeRoute,
     options: Pick<CreateGiriAppOptions<unknown>, 'services' | 'cookieSecret'>,
@@ -143,16 +123,28 @@ function routeRegistration(
         : (route.shared ?? []).flatMap((shared, index) =>
             normalizeMiddleware(shared.middleware, `${route.method} ${path} shared[${index}]`),
         );
+    const middleware = [
+        ...inherited,
+        ...normalizeMiddleware(route.module.middleware, `${route.method} ${path}`),
+    ];
 
     return {
         method: route.method,
         path,
         handle: route.module.handle,
-        middleware: [
-            ...inherited,
-            ...normalizeMiddleware(route.module.middleware, `${route.method} ${path}`),
-        ],
-        input: routeInput(route),
+        middleware,
+        input: resolveRouteInput([
+            ...middleware.map((fn, index) => ({
+                label: `${route.method} ${path} middleware[${index}]`,
+                body: fn.body,
+                query: fn.query,
+            })),
+            {
+                label: `${route.method} ${path}`,
+                body: route.module.body,
+                query: route.module.query,
+            },
+        ]),
         services: options.services,
         cookieSecret: options.cookieSecret,
     };

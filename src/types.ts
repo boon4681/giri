@@ -197,8 +197,14 @@ export interface MiddlewareOpenApi {
 }
 
 export interface MiddlewareOptions {
+    /** Validate and expose this request body before the middleware chain runs. */
+    body?: GiriBodySchema;
+    /** Validate and expose these query parameters before the middleware chain runs. */
+    query?: GiriInputSchema;
     openapi?: MiddlewareOpenApi;
 }
+
+declare const middlewareTypesBrand: unique symbol;
 
 export interface Middleware<
     Params extends Record<string, string> = Record<string, string>,
@@ -206,11 +212,20 @@ export interface Middleware<
     Vars extends Record<string, unknown> = {},
 > {
     (c: Context<Params, Input, Vars>, next: Next): HandlerResponse | void | Promise<HandlerResponse | void>;
+    readonly [middlewareTypesBrand]?: {
+        params: Params;
+        input: Input;
+        vars: Vars;
+    };
+    body?: GiriBodySchema;
+    query?: GiriInputSchema;
     openapi?: MiddlewareOpenApi;
 }
 
 /** The context vars a middleware injects (its `Vars` type parameter). */
-export type VarsOf<M> = M extends Middleware<Record<string, string>, ValidatedInput, infer V>
+export type VarsOf<M> = M extends {
+    readonly [middlewareTypesBrand]?: { vars: infer V extends Record<string, unknown> };
+}
     ? V
     : {};
 
@@ -226,7 +241,7 @@ export type MergeStack<T> = T extends readonly [infer Head, ...infer Rest]
  */
 export type InferStackVars<T> = T extends readonly [unknown, ...unknown[]]
     ? MergeStack<T>
-    : T extends Middleware<Record<string, string>, ValidatedInput, any>
+    : T extends Middleware<any, any, any>
         ? VarsOf<T>
         : {};
 
@@ -298,6 +313,33 @@ export type ValidQuery<Q> = Q extends GiriInputSchema<infer Output> ? Output : n
 
 /** Drop keys whose value resolved to `never` (an input the route didn't declare). */
 type PruneNever<T> = { [K in keyof T as [T[K]] extends [never] ? never : K]: T[K] };
+
+/** Derive validated input from middleware metadata added by `defineMiddleware({ body, query }, ...)`. */
+export type InputOfMiddleware<M> = PruneNever<{
+    body: M extends { body: infer B } ? ValidBody<B> : never;
+    query: M extends { query: infer Q } ? ValidQuery<Q> : never;
+}>;
+
+/** Intersect the validated inputs contributed by a tuple built with `stack(...)`. */
+export type MergeStackInput<T> = T extends readonly [infer Head, ...infer Rest]
+    ? InputOfMiddleware<Head> & MergeStackInput<Rest>
+    : {};
+
+/** Derive validated input contributed by a middleware function or stack. */
+export type InferStackInput<T> = T extends readonly [unknown, ...unknown[]]
+    ? MergeStackInput<T>
+    : InputOfMiddleware<T>;
+
+/** The validated input contributed by a module's own `middleware` export. */
+export type MiddlewareInputOf<M> = M extends { middleware: infer Stack }
+    ? InferStackInput<Stack>
+    : {};
+
+/** Derive the callback input type from `defineMiddleware` options. */
+export type MiddlewareOptionsInput<O> = PruneNever<{
+    body: O extends { body: infer B } ? ValidBody<B> : never;
+    query: O extends { query: infer Q } ? ValidQuery<Q> : never;
+}>;
 
 /**
  * Derive a route's `ValidatedInput` from a module's `body`/`query` exports. The generated
