@@ -23,6 +23,12 @@ interface FailedInput {
 
 export type PreparedRequestInput = PreparedInput | FailedInput;
 
+export interface RouteInputSource {
+    label: string;
+    body?: unknown;
+    query?: unknown;
+}
+
 /**
  * Build a giri input schema from a `validate` + `toJsonSchema` pair. Vendor adapters use
  * this; you can call it directly to make a custom validator. The brand is a global symbol,
@@ -57,6 +63,49 @@ export function isGiriBodySchema(value: unknown): value is GiriBodySchema {
             typeof value === 'object' &&
             (value as Record<symbol, unknown>)[bodySchemaBrand] === true,
     );
+}
+
+/**
+ * Resolve route and middleware validators into the single input contract exposed by
+ * `c.req.valid`. A target can only have one owner so validated data is never silently replaced.
+ */
+export function resolveRouteInput(sources: readonly RouteInputSource[]): RouteInput | undefined {
+    const input: RouteInput = {};
+    const owners: Partial<Record<keyof RouteInput, string>> = {};
+
+    for (const source of sources) {
+        if (source.body !== undefined) {
+            if (!isGiriBodySchema(source.body)) {
+                throw new Error(
+                    `${source.label}: "body" must be wrapped with a validator, e.g. \`zod.body({ json: ... })\` from @boon4681/giri/validators/zod.`,
+                );
+            }
+            if (input.body) {
+                throw new Error(
+                    `${source.label}: body validator conflicts with the body validator from ${owners.body}.`,
+                );
+            }
+            input.body = source.body;
+            owners.body = source.label;
+        }
+
+        if (source.query !== undefined) {
+            if (!isGiriInputSchema(source.query)) {
+                throw new Error(
+                    `${source.label}: "query" must be wrapped with a validator, e.g. \`zod.query(...)\` from @boon4681/giri/validators/zod.`,
+                );
+            }
+            if (input.query) {
+                throw new Error(
+                    `${source.label}: query validator conflicts with the query validator from ${owners.query}.`,
+                );
+            }
+            input.query = source.query;
+            owners.query = source.label;
+        }
+    }
+
+    return input.body || input.query ? input : undefined;
 }
 
 const MIME_TO_CONTENT_TYPE: Record<string, BodyContentType> = {

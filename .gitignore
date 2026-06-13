@@ -23,3 +23,5 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.test
+.bench
+.yarn*

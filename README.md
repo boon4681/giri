@@ -174,6 +174,28 @@ export const auth = defineMiddleware<{ userId: string }>(
 );
 ```
 
+`defineMiddleware` can also own a body or query validator. Validation runs before the middleware,
+`c.req.valid(...)` is typed inside it, and every downstream handler receives the same typed input.
+The validator is also included in generated OpenAPI:
+
+```ts
+const pagination = defineMiddleware(
+    {
+        query: zod.query(z.object({
+            page: z.coerce.number().int().positive(),
+        })),
+    },
+    async (c, next) => {
+        const { page } = c.req.valid("query");
+        c.set("page", page);
+        await next();
+    },
+);
+```
+
+Only one applied layer may own each target (`body` or `query`). Giri reports a conflict during app
+construction if middleware and a route export, or two middleware, define the same target.
+
 Hide a route or subtree from `openapi.json` with `export const openapi = false` (in a verb file
 or a `+shared.ts`). Hidden routes still serve normally.
 

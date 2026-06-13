@@ -68,8 +68,9 @@ describe('syncProject', () => {
             'utf8',
         );
         expect(types).toContain('"id": string;');
-        expect(types).toContain('export type Handle<Input');
-        expect(types).toContain('import("@boon4681/giri").Handle<Params, Input, Vars>');
+        expect(types).toContain('export type Input =');
+        expect(types).toContain('export type Handle<OwnInput');
+        expect(types).toContain('import("@boon4681/giri").Handle<Params, Input & OwnInput, Vars>');
         expect(types).toContain('export type Middleware<Injects');
 
         const tsconfig = await readFile(join(outDir, 'tsconfig.json'), 'utf8');
@@ -205,6 +206,84 @@ describe('syncProject', () => {
         });
         const diagnostics = ts.getPreEmitDiagnostics(program);
         expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
+    });
+
+    it('propagates middleware-owned input into the middleware callback, handlers, and OpenAPI', async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const outDir = join(tmp, '.giri');
+        const giri = join(process.cwd(), 'src', 'index').replace(/\\/g, '/');
+        const zodAdapter = join(process.cwd(), 'src', 'validators', 'zod').replace(/\\/g, '/');
+        await mkdir(join(routesDir, 'search'), { recursive: true });
+        await writeFile(
+            join(routesDir, 'search', '+shared.ts'),
+            [
+                `import { defineMiddleware, stack } from "${giri}";`,
+                'import { z } from "zod";',
+                `import { zod } from "${zodAdapter}";`,
+                'import type { Middleware } from "./$types";',
+                '',
+                'const query = zod.query(z.object({ page: z.coerce.number().int().positive() }));',
+                'const pagination = defineMiddleware({ query }, async (c, next) => {',
+                '  const page: number = c.req.valid("query").page;',
+                '  // @ts-expect-error page is a number after validation',
+                '  const bad: string = c.req.valid("query").page;',
+                '  await next();',
+                '});',
+                'const requestId: Middleware<{ requestId: string }> = async (c, next) => {',
+                '  c.set("requestId", "test");',
+                '  await next();',
+                '};',
+                'export const middleware = stack(pagination, requestId);',
+            ].join('\n'),
+        );
+        await writeFile(
+            join(routesDir, 'search', '+get.ts'),
+            [
+                'import type { GET } from "./$types";',
+                'export const handle: GET = (c) => {',
+                '  const page: number = c.req.valid("query").page;',
+                '  const requestId: string = c.get("requestId");',
+                '  // @ts-expect-error page is a number in downstream handlers too',
+                '  const bad: string = c.req.valid("query").page;',
+                '  return c.json({ page, requestId, bad });',
+                '};',
+            ].join('\n'),
+        );
+
+        await syncProject({ outDir }, { cwd: tmp });
+
+        const program = ts.createProgram(
+            [
+                join(routesDir, 'search', '+shared.ts'),
+                join(routesDir, 'search', '+get.ts'),
+            ],
+            {
+                target: ts.ScriptTarget.ES2022,
+                module: ts.ModuleKind.NodeNext,
+                moduleResolution: ts.ModuleResolutionKind.NodeNext,
+                strict: true,
+                skipLibCheck: true,
+                rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
+                baseUrl: process.cwd(),
+                paths: {
+                    '@boon4681/giri': ['src/index.ts'],
+                    '@boon4681/giri/validators/zod': ['src/validators/zod.ts'],
+                },
+                types: ['node'],
+            },
+        );
+        const diagnostics = ts.getPreEmitDiagnostics(program);
+        expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
+
+        const doc = JSON.parse(await readFile(join(outDir, 'openapi.json'), 'utf8'));
+        expect(doc.paths['/search'].get.parameters).toMatchObject([
+            {
+                name: 'page',
+                in: 'query',
+                required: true,
+                schema: { type: 'integer', exclusiveMinimum: 0 },
+            },
+        ]);
     });
 
     it("folds a verb file's own middleware vars into its method handle c.get", async () => {
@@ -343,7 +422,7 @@ describe('syncProject', () => {
         expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
     });
 
-    it('does not leak a global ContextVariableMap augmentation onto a bare fromHono route', async () => {
+    it('infers a plugin ContextVariableMap augmentation from a bare Hono middleware', async () => {
         const routesDir = join(tmp, 'src', 'routes');
         const outDir = join(tmp, '.giri');
         await mkdir(join(routesDir, 'me'), { recursive: true });
@@ -351,17 +430,17 @@ describe('syncProject', () => {
             join(routesDir, 'me', '+shared.ts'),
             [
                 'import { fromHono } from "@boon4681/giri/adapters/hono";',
+                'import type { MiddlewareHandler } from "hono";',
                 '',
-                '// A plugin (e.g. @hono/oauth-providers) augments Hono\'s global ContextVariableMap',
-                '// process-wide - but it is only applied under its own folder, not here.',
+                '// Matches @hono/oauth-providers: a bare MiddlewareHandler plus a global map augmentation.',
                 'declare module "hono" {',
                 '  interface ContextVariableMap {',
                 '    "user-google": { email: string } | undefined;',
                 '  }',
                 '}',
                 '',
-                '// A bare fromHono (like cors) injects nothing: Vars default to {}, NOT the global map.',
-                'export const middleware = fromHono(async (_c, next) => { await next(); });',
+                'declare const googleAuth: () => MiddlewareHandler;',
+                'export const middleware = fromHono(googleAuth());',
             ].join('\n'),
         );
         await writeFile(
@@ -369,12 +448,11 @@ describe('syncProject', () => {
             [
                 'import type { Handle } from "./$types";',
                 'export const handle: Handle = (c) => {',
-                '  // user-google is NOT in this route\'s middleware vars, so c.get falls back to unknown',
-                '  // rather than the leaked global augmentation.',
-                '  const user: unknown = c.get("user-google");',
-                '  // @ts-expect-error unknown is not the augmented { email } shape - no leak',
-                '  const email: string = c.get("user-google").email;',
-                '  return c.json({ ok: true, user, email });',
+                '  const user = c.get("user-google");',
+                '  const email: string | undefined = user?.email;',
+                '  // @ts-expect-error email is a string when the plugin supplied a user',
+                '  const bad: number = user?.email;',
+                '  return c.json({ email, bad });',
                 '};',
             ].join('\n'),
         );

@@ -4,8 +4,11 @@ import {
     type Services,
     type Context,
     type HandlerResponse,
+    type GiriBodySchema,
+    type GiriInputSchema,
     type Middleware,
     type MiddlewareOptions,
+    type MiddlewareOptionsInput,
     type ResponseFormat,
     type StatusCode,
     type TypedResponse,
@@ -272,11 +275,32 @@ type AnyMiddleware<Vars extends Record<string, unknown>> = Middleware<
     Vars
 >;
 
+type MiddlewareMetadata<Options extends MiddlewareOptions> =
+    ('body' extends keyof Options ? { readonly body: Options['body'] & GiriBodySchema } : {}) &
+    ('query' extends keyof Options ? { readonly query: Options['query'] & GiriInputSchema } : {});
+
+type DefinedMiddleware<
+    Options extends MiddlewareOptions,
+    Vars extends Record<string, unknown>,
+> = Middleware<Record<string, string>, MiddlewareOptionsInput<Options>, Vars> &
+    MiddlewareMetadata<Options>;
+
 export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
     middleware: AnyMiddleware<Vars>,
 ): AnyMiddleware<Vars>;
+export function defineMiddleware<const Options extends MiddlewareOptions>(
+    options: Options,
+    middleware: Middleware<Record<string, string>, MiddlewareOptionsInput<Options>, {}>,
+): DefinedMiddleware<Options, {}>;
+export function defineMiddleware<
+    Vars extends Record<string, unknown>,
+    const Options extends MiddlewareOptions,
+>(
+    options: Options,
+    middleware: Middleware<Record<string, string>, MiddlewareOptionsInput<Options>, Vars>,
+): DefinedMiddleware<Options, Vars>;
 export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
-    options: MiddlewareOptions,
+    options: MiddlewareOptions & { body?: never; query?: never },
     middleware: AnyMiddleware<Vars>,
 ): AnyMiddleware<Vars>;
 export function defineMiddleware(
@@ -291,6 +315,8 @@ export function defineMiddleware(
         throw new Error('defineMiddleware(options, middleware) requires a middleware function.');
     }
 
+    maybeMiddleware.body = optionsOrMiddleware.body;
+    maybeMiddleware.query = optionsOrMiddleware.query;
     maybeMiddleware.openapi = optionsOrMiddleware.openapi;
     return maybeMiddleware;
 }
@@ -301,8 +327,8 @@ export function defineMiddleware(
  * to downstream handlers. Use it for `+shared.ts` and verb `middleware` exports:
  * `export const middleware = stack(auth, requireAdmin)`.
  */
-// `Vars` is contravariant (it sits in the `c` parameter), so the constraint must leave it
-// open (`any`) otherwise a middleware that injects vars isn't assignable to the element type.
-export function stack<T extends Middleware<Record<string, string>, ValidatedInput, any>[]>(...middleware: T): T {
+// Input and Vars are contravariant because they sit in the callback's context parameter.
+// Keep both open so middleware with validator-owned input and injected vars can share a stack.
+export function stack<T extends Middleware<any, any, any>[]>(...middleware: T): T {
     return middleware;
 }

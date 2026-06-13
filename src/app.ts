@@ -3,9 +3,7 @@ import { isAbsolute, join, resolve } from 'node:path';
 import { safeRegister } from './loader/loader';
 import { assertRouteHandleExport, scanRoutes, type ScannedRoute } from './routes';
 import type {
-    GiriBodySchema,
     GiriConfig,
-    GiriInputSchema,
     GiriPaths,
     GiriRouteRegistration,
     Handle,
@@ -13,7 +11,7 @@ import type {
     RouteInput,
     Services,
 } from './types';
-import { isGiriBodySchema, isGiriInputSchema } from './validation';
+import { resolveRouteInput } from './validation';
 
 export interface BuildGiriAppOptions {
     cwd?: string;
@@ -78,33 +76,15 @@ function normalizeMiddleware(value: unknown, file: string): Middleware[] {
     throw new Error(`Middleware export in ${file} must be a function or an array of functions.`);
 }
 
-function assertBodySchema(value: unknown, file: string): asserts value is GiriBodySchema {
-    if (!isGiriBodySchema(value)) {
-        throw new Error(
-            `${file}: "body" must be wrapped with a validator, e.g. \`export const body = zod.body({ json: ... })\` from @boon4681/giri/validators/zod.`,
-        );
-    }
-}
-
-function assertQuerySchema(value: unknown, file: string): asserts value is GiriInputSchema {
-    if (!isGiriInputSchema(value)) {
-        throw new Error(
-            `${file}: "query" must be wrapped with a validator, e.g. \`export const query = zod.query(...)\` from @boon4681/giri/validators/zod.`,
-        );
-    }
-}
-
-function routeInput(routeModule: RouteModule, file: string): RouteInput | undefined {
-    const input: RouteInput = {};
-    if (routeModule.body !== undefined) {
-        assertBodySchema(routeModule.body, file);
-        input.body = routeModule.body;
-    }
-    if (routeModule.query !== undefined) {
-        assertQuerySchema(routeModule.query, file);
-        input.query = routeModule.query;
-    }
-    return input.body || input.query ? input : undefined;
+function routeInput(routeModule: RouteModule, middleware: Middleware[], file: string): RouteInput | undefined {
+    return resolveRouteInput([
+        ...middleware.map((fn, index) => ({
+            label: `${file} middleware[${index}]`,
+            body: fn.body,
+            query: fn.query,
+        })),
+        { label: file, body: routeModule.body, query: routeModule.query },
+    ]);
 }
 
 function aliasValues(value: string | string[]): string[] {
@@ -268,13 +248,14 @@ export async function buildGiriApp<App>(
                     normalizeMiddleware((loadShared(file) as { middleware?: unknown }).middleware, file),
                 );
             const verbMiddleware = normalizeMiddleware(routeModule.middleware, route.file);
+            const middleware = [...folderMiddleware, ...verbMiddleware];
 
             return {
                 method: route.method,
                 path: route.path,
                 handle: routeModule.handle,
-                middleware: [...folderMiddleware, ...verbMiddleware],
-                input: routeInput(routeModule, route.file),
+                middleware,
+                input: routeInput(routeModule, middleware, route.file),
                 services: options.services,
                 cookieSecret: config.cookieSecret,
             };
