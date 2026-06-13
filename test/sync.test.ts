@@ -286,6 +286,85 @@ describe('syncProject', () => {
         ]);
     });
 
+    it('supports explicit middleware vars together with a query validator', async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const outDir = join(tmp, '.giri');
+        const giri = join(process.cwd(), 'src', 'index').replace(/\\/g, '/');
+        const zodAdapter = join(process.cwd(), 'src', 'validators', 'zod').replace(/\\/g, '/');
+        await mkdir(join(routesDir, 'items'), { recursive: true });
+        await writeFile(
+            join(routesDir, 'items', '+shared.ts'),
+            [
+                `import { defineMiddleware } from "${giri}";`,
+                'import { z } from "zod";',
+                `import { zod } from "${zodAdapter}";`,
+                '',
+                'type Pagination = { size: number; page: number };',
+                'export const middleware = defineMiddleware<{',
+                '  pagination: Pagination | { error: true };',
+                '}>({',
+                '  query: zod.query(z.object({',
+                '    size: z.string().optional(),',
+                '    page: z.string().optional(),',
+                '  })),',
+                '}, async (c, next) => {',
+                '  const { size, page } = c.req.valid("query");',
+                '  if (size || page) {',
+                '    c.set("pagination", { size: Number(size ?? 100), page: Number(page ?? 0) });',
+                '  } else {',
+                '    c.set("pagination", { error: true });',
+                '  }',
+                '  await next();',
+                '});',
+            ].join('\n'),
+        );
+        await writeFile(
+            join(routesDir, 'items', '+get.ts'),
+            [
+                'import type { GET } from "./$types";',
+                'export const handle: GET = (c) => {',
+                '  const pagination: { size: number; page: number } | { error: true } =',
+                '    c.get("pagination");',
+                '  const size = c.req.valid("query").size;',
+                '  // @ts-expect-error pagination is not a string',
+                '  const bad: string = c.get("pagination");',
+                '  return c.json({ pagination, size, bad });',
+                '};',
+            ].join('\n'),
+        );
+
+        await syncProject({ outDir }, { cwd: tmp });
+
+        const program = ts.createProgram(
+            [
+                join(routesDir, 'items', '+shared.ts'),
+                join(routesDir, 'items', '+get.ts'),
+            ],
+            {
+                target: ts.ScriptTarget.ES2022,
+                module: ts.ModuleKind.NodeNext,
+                moduleResolution: ts.ModuleResolutionKind.NodeNext,
+                strict: true,
+                skipLibCheck: true,
+                rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
+                baseUrl: process.cwd(),
+                paths: {
+                    '@boon4681/giri': ['src/index.ts'],
+                    '@boon4681/giri/validators/zod': ['src/validators/zod.ts'],
+                },
+                types: ['node'],
+            },
+        );
+        const diagnostics = ts.getPreEmitDiagnostics(program);
+        expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
+
+        const doc = JSON.parse(await readFile(join(outDir, 'openapi.json'), 'utf8'));
+        expect(doc.paths['/items'].get.parameters).toMatchObject([
+            { name: 'size', in: 'query', required: false },
+            { name: 'page', in: 'query', required: false },
+        ]);
+    });
+
     it("folds a verb file's own middleware vars into its method handle c.get", async () => {
         const routesDir = join(tmp, 'src', 'routes');
         const outDir = join(tmp, '.giri');

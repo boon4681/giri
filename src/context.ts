@@ -285,6 +285,21 @@ type DefinedMiddleware<
 > = Middleware<Record<string, string>, MiddlewareOptionsInput<Options>, Vars> &
     MiddlewareMetadata<Options>;
 
+type ExplicitBodyOptions = Omit<MiddlewareOptions, 'body' | 'query'> & {
+    body: GiriBodySchema<any>;
+    query?: undefined;
+};
+
+type ExplicitQueryOptions = Omit<MiddlewareOptions, 'body' | 'query'> & {
+    body?: undefined;
+    query: GiriInputSchema<any>;
+};
+
+type ExplicitBodyQueryOptions = Omit<MiddlewareOptions, 'body' | 'query'> & {
+    body: GiriBodySchema<any>;
+    query: GiriInputSchema<any>;
+};
+
 export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
     middleware: AnyMiddleware<Vars>,
 ): AnyMiddleware<Vars>;
@@ -300,13 +315,37 @@ export function defineMiddleware<
     middleware: Middleware<Record<string, string>, MiddlewareOptionsInput<Options>, Vars>,
 ): DefinedMiddleware<Options, Vars>;
 export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
+    options: ExplicitBodyQueryOptions,
+    middleware: Middleware<
+        Record<string, string>,
+        MiddlewareOptionsInput<ExplicitBodyQueryOptions>,
+        Vars
+    >,
+): DefinedMiddleware<ExplicitBodyQueryOptions, Vars>;
+export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
+    options: ExplicitBodyOptions,
+    middleware: Middleware<
+        Record<string, string>,
+        MiddlewareOptionsInput<ExplicitBodyOptions>,
+        Vars
+    >,
+): DefinedMiddleware<ExplicitBodyOptions, Vars>;
+export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
+    options: ExplicitQueryOptions,
+    middleware: Middleware<
+        Record<string, string>,
+        MiddlewareOptionsInput<ExplicitQueryOptions>,
+        Vars
+    >,
+): DefinedMiddleware<ExplicitQueryOptions, Vars>;
+export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
     options: MiddlewareOptions & { body?: never; query?: never },
     middleware: AnyMiddleware<Vars>,
 ): AnyMiddleware<Vars>;
 export function defineMiddleware(
-    optionsOrMiddleware: MiddlewareOptions | Middleware,
-    maybeMiddleware?: Middleware,
-): Middleware {
+    optionsOrMiddleware: MiddlewareOptions | Middleware<any, any, any>,
+    maybeMiddleware?: Middleware<any, any, any>,
+): Middleware<any, any, any> {
     if (typeof optionsOrMiddleware === 'function') {
         return optionsOrMiddleware;
     }
