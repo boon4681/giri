@@ -559,7 +559,7 @@ describe('syncProject', () => {
         expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
     });
 
-    it("infers c.get from a Hono middleware's own Env Variables (scoped, no generic)", async () => {
+    it('does not leak a global ContextVariableMap augmentation onto a bare fromHono route', async () => {
         const routesDir = join(tmp, 'src', 'routes');
         const outDir = join(tmp, '.giri');
         await mkdir(join(routesDir, 'me'), { recursive: true });
@@ -567,14 +567,17 @@ describe('syncProject', () => {
             join(routesDir, 'me', '+shared.ts'),
             [
                 'import { fromHono } from "@boon4681/giri/adapters/hono";',
-                'import type { MiddlewareHandler } from "hono";',
                 '',
-                '// A middleware that types its own scoped Variables (Hono\'s per-handler Env scope).',
-                'const auth: MiddlewareHandler<{ Variables: { user: { id: string } } }> =',
-                '  async (_c, next) => { await next(); };',
+                '// A plugin (e.g. @hono/oauth-providers) augments Hono\'s global ContextVariableMap',
+                '// process-wide - but it is only applied under its own folder, not here.',
+                'declare module "hono" {',
+                '  interface ContextVariableMap {',
+                '    "user-google": { email: string } | undefined;',
+                '  }',
+                '}',
                 '',
-                '// No generic needed - fromHono infers { user } from the handler\'s Env.',
-                'export const middleware = fromHono(auth);',
+                '// A bare fromHono (like cors) injects nothing: Vars default to {}, NOT the global map.',
+                'export const middleware = fromHono(async (_c, next) => { await next(); });',
             ].join('\n'),
         );
         await writeFile(
@@ -582,10 +585,12 @@ describe('syncProject', () => {
             [
                 'import type { Handle } from "./$types";',
                 'export const handle: Handle = (c) => {',
-                '  const id: string = c.get("user").id;',
-                '  // @ts-expect-error user.id is a string, not a number',
-                '  const bad: number = c.get("user").id;',
-                '  return c.json({ id, bad });',
+                '  // user-google is NOT in this route\'s middleware vars, so c.get falls back to unknown',
+                '  // rather than the leaked global augmentation.',
+                '  const user: unknown = c.get("user-google");',
+                '  // @ts-expect-error unknown is not the augmented { email } shape - no leak',
+                '  const email: string = c.get("user-google").email;',
+                '  return c.json({ ok: true, user, email });',
                 '};',
             ].join('\n'),
         );
@@ -609,25 +614,28 @@ describe('syncProject', () => {
         expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
     });
 
-    it('infers a plugin ContextVariableMap augmentation from a bare Hono middleware', async () => {
+    it('types c.get from an explicit fromHono<Vars>, even stacked with a bare fromHono', async () => {
         const routesDir = join(tmp, 'src', 'routes');
         const outDir = join(tmp, '.giri');
         await mkdir(join(routesDir, 'me'), { recursive: true });
         await writeFile(
             join(routesDir, 'me', '+shared.ts'),
             [
+                'import { stack } from "@boon4681/giri";',
                 'import { fromHono } from "@boon4681/giri/adapters/hono";',
                 'import type { MiddlewareHandler } from "hono";',
                 '',
-                '// Matches @hono/oauth-providers: a bare MiddlewareHandler plus a global map augmentation.',
-                'declare module "hono" {',
-                '  interface ContextVariableMap {',
-                '    "user-google": { email: string } | undefined;',
-                '  }',
-                '}',
-                '',
+                "// @hono/oauth-providers exposes user-google only via Hono's GLOBAL ContextVariableMap,",
+                '// which cannot be folder-scoped without leaking it to every other route. Pass the vars',
+                '// explicitly so they travel with THIS middleware only; a bare fromHono (cors) stacked',
+                '// alongside contributes nothing.',
+                'type GoogleVars = { "user-google": { email: string } | undefined };',
                 'declare const googleAuth: () => MiddlewareHandler;',
-                'export const middleware = fromHono(googleAuth());',
+                'declare const cors: () => MiddlewareHandler;',
+                'export const middleware = stack(',
+                '  fromHono<GoogleVars>(googleAuth()),',
+                '  fromHono(cors()),',
+                ');',
             ].join('\n'),
         );
         await writeFile(

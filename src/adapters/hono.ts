@@ -49,18 +49,18 @@ type IsAny<T> = 0 extends 1 & T ? true : false;
 
 /**
  * The `Variables` a single Hono middleware declares on its own `Env` (`MiddlewareHandler<{ Variables }>`).
- * This scoped typing travels with the handler. A bare `MiddlewareHandler` has no scoped variables,
- * so it falls back to Hono's `ContextVariableMap` for plugins such as `@hono/oauth-providers`.
+ * This is Hono's *scoped* var typing - unlike the global `ContextVariableMap`, it travels with the
+ * handler. A handler with no typed Variables (e.g. `cors()`, whose `Env` is `any`) contributes `{}`.
  */
 type HonoHandlerVars<H> = H extends MiddlewareHandler<infer E>
     ? E extends { Variables: infer V }
         ? IsAny<V> extends true
-            ? HonoContextVars
+            ? {}
             : V extends Record<string, unknown>
                 ? V
-                : HonoContextVars
-        : HonoContextVars
-    : HonoContextVars;
+                : {}
+        : {}
+    : {};
 
 /** Intersect the scoped Variables of every handler passed to `fromHono`. */
 type MergeHandlerVars<H extends readonly unknown[]> = H extends readonly [infer Head, ...infer Tail]

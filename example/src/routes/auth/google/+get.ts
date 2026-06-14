@@ -1,9 +1,9 @@
 import "dotenv/config"
 import { fromHono } from "@boon4681/giri/adapters/hono";
-import { googleAuth } from '@hono/oauth-providers/google';
+import { googleAuth, GoogleUser } from '@hono/oauth-providers/google';
 import { GET } from "./$types";
 
-export const middleware = fromHono(googleAuth({
+export const middleware = fromHono<{ 'user-google': GoogleUser }>(googleAuth({
     client_id: process.env.GOOGLE_CLIENT_ID,
     client_secret: process.env.GOOGLE_CLIENT_SECRET,
     scope: ['openid', 'email', 'profile'],
