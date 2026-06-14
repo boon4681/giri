@@ -352,8 +352,11 @@ export type RouteInputOf<M> = PruneNever<{
 }>;
 
 export interface RouteInput {
-    body?: GiriBodySchema;
-    query?: GiriInputSchema;
+    // Each owner (route export + every applied middleware) contributes a validator; the
+    // results are merged, matching the type layer which intersects them. Order is middleware
+    // first, then the route, so a route's fields win on key collisions.
+    body?: GiriBodySchema[];
+    query?: GiriInputSchema[];
 }
 
 export interface RouteOpenApi {

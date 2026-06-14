@@ -10,6 +10,7 @@ import {
     type ScannedRoute,
 } from '../routes';
 import type { GiriConfig, GiriPaths, HttpMethod } from '../types';
+import { RouteInputError } from '../validation';
 import { writeAppTypes } from './app-types';
 import type { RouteInputSchemas } from './inputs';
 import { writeManifest } from './manifest';
@@ -132,6 +133,11 @@ async function extractMeta(
             }
         }
     } catch (error) {
+        // A validator owner conflict is an actionable config error - fail loudly rather than
+        // silently shipping a route whose input/openapi is missing.
+        if (error instanceof RouteInputError) {
+            throw error;
+        }
         console.warn(`giri: skipped input/security generation (${(error as Error).message}).`);
     }
 

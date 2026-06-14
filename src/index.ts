@@ -16,6 +16,7 @@ export {
     isGiriBodySchema,
     isGiriInputSchema,
     prepareRequestInput,
+    RouteInputError,
 } from './validation';
 export { buildGiriApp, resolveGiriPaths } from './app';
 export { scanRoutes } from './routes';

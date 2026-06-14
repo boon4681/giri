@@ -4,8 +4,8 @@ import { registerAliasResolver } from '../app';
 import { safeRegister } from '../loader/loader';
 import type { ScannedRoute } from '../routes';
 import type { GiriConfig, GiriPaths, Middleware, SecurityRequirement } from '../types';
-import { resolveRouteInput } from '../validation';
-import { bodyToJsonSchemas, inputToJsonSchema, type RouteInputSchemas } from './inputs';
+import { resolveRouteInput, RouteInputError } from '../validation';
+import { bodiesToJsonSchemas, queryToJsonSchema, type RouteInputSchemas } from './inputs';
 import { parseRouteOpenApi } from './schema/route-openapi';
 
 export interface RouteSecurity {
@@ -87,8 +87,8 @@ function readInput(
         { label, body: routeModule.body, query: routeModule.query },
     ]);
     const input: RouteInputSchemas = {};
-    const body = bodyToJsonSchemas(resolved?.body);
-    const query = inputToJsonSchema(resolved?.query);
+    const body = bodiesToJsonSchemas(resolved?.body);
+    const query = queryToJsonSchema(resolved?.query);
     if (body) {
         input.body = body;
     }
@@ -611,8 +611,13 @@ export async function extractRouteMeta(
                 if (meta.input || meta.security || meta.hidden || meta.openapi) {
                     byFile.set(route.file, meta);
                 }
-            } catch {
-                // A route that fails to load just contributes no metadata.
+            } catch (error) {
+                // A validator conflict is an actionable config error (the same one the app throws
+                // at boot) - surface it instead of silently dropping the route's metadata. A plain
+                // load failure just contributes no metadata.
+                if (error instanceof RouteInputError) {
+                    throw error;
+                }
             }
         }
     } finally {

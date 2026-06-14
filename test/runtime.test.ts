@@ -127,7 +127,7 @@ describe('createApp', () => {
             middleware: [shared, own],
             services,
             cookieSecret: 'secret',
-            input: { query },
+            input: { query: [query] },
         });
     });
 
@@ -200,14 +200,18 @@ describe('createApp', () => {
         expect(middlewarePage).toBe(2);
     });
 
-    it('rejects competing validators for the same input target', () => {
-        const query = defineInputSchema({
+    it('collects every owner of a target so their validators merge (middleware first, route last)', () => {
+        const middlewareQuery = defineInputSchema({
             validate: (value) => ({ ok: true as const, value }),
             toJsonSchema: () => ({ type: 'object' }),
         });
-        const pagination = defineMiddleware({ query }, async (_c, next) => next());
+        const routeQuery = defineInputSchema({
+            validate: (value) => ({ ok: true as const, value }),
+            toJsonSchema: () => ({ type: 'object' }),
+        });
+        const pagination = defineMiddleware({ query: middlewareQuery }, async (_c, next) => next());
 
-        expect(() => createApp({
+        const app = createApp({
             adapter: testAdapter(),
             routes: [
                 {
@@ -215,12 +219,14 @@ describe('createApp', () => {
                     path: '/search',
                     shared: [{ middleware: pagination }],
                     module: {
-                        query,
+                        query: routeQuery,
                         handle: (c) => c.json({ ok: true }),
                     },
                 },
             ],
-        })).toThrow(/query validator conflicts/);
+        });
+
+        expect(app.registrations[0].input).toEqual({ query: [middlewareQuery, routeQuery] });
     });
 
     it('respects skipInherited while retaining route middleware', () => {

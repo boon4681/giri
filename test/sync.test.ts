@@ -302,7 +302,7 @@ describe('syncProject', () => {
                 'type Pagination = { size: number; page: number };',
                 'export const middleware = defineMiddleware<{',
                 '  pagination: Pagination | { error: true };',
-                '}>({',
+                '}>()({',
                 '  query: zod.query(z.object({',
                 '    size: z.string().optional(),',
                 '    page: z.string().optional(),',
@@ -325,10 +325,12 @@ describe('syncProject', () => {
                 'export const handle: GET = (c) => {',
                 '  const pagination: { size: number; page: number } | { error: true } =',
                 '    c.get("pagination");',
-                '  const size = c.req.valid("query").size;',
+                '  const size: string | undefined = c.req.valid("query").size;',
+                '  // @ts-expect-error query.size is a string, not a number (validator output preserved)',
+                '  const badSize: number = c.req.valid("query").size;',
                 '  // @ts-expect-error pagination is not a string',
                 '  const bad: string = c.get("pagination");',
-                '  return c.json({ pagination, size, bad });',
+                '  return c.json({ pagination, size, badSize, bad });',
                 '};',
             ].join('\n'),
         );
@@ -363,6 +365,112 @@ describe('syncProject', () => {
             { name: 'size', in: 'query', required: false },
             { name: 'page', in: 'query', required: false },
         ]);
+    });
+
+    it('rejects a Vars type argument alongside a validator, pointing to the curried form', async () => {
+        const giri = join(process.cwd(), 'src', 'index').replace(/\\/g, '/');
+        const zodAdapter = join(process.cwd(), 'src', 'validators', 'zod').replace(/\\/g, '/');
+        const file = join(tmp, 'bad-middleware.ts');
+        await mkdir(tmp, { recursive: true });
+        await writeFile(
+            file,
+            [
+                `import { defineMiddleware } from "${giri}";`,
+                'import { z } from "zod";',
+                `import { zod } from "${zodAdapter}";`,
+                '',
+                // The erasing form: a Vars type argument next to a query validator.
+                'export const middleware = defineMiddleware<{ uid: string }>({',
+                '  query: zod.query(z.object({ size: z.string().optional() })),',
+                '}, async (c, next) => { await next(); });',
+            ].join('\n'),
+        );
+
+        const program = ts.createProgram([file], {
+            target: ts.ScriptTarget.ES2022,
+            module: ts.ModuleKind.NodeNext,
+            moduleResolution: ts.ModuleResolutionKind.NodeNext,
+            strict: true,
+            skipLibCheck: true,
+            baseUrl: process.cwd(),
+            paths: {
+                '@boon4681/giri': ['src/index.ts'],
+                '@boon4681/giri/validators/zod': ['src/validators/zod.ts'],
+            },
+            types: ['node'],
+        });
+        const messages = ts
+            .getPreEmitDiagnostics(program)
+            .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'));
+        expect(messages.some((message) => message.includes('No overload matches this call'))).toBe(true);
+        expect(messages.some((message) => message.includes('curried form'))).toBe(true);
+    });
+
+    it('merges a route query export with a middleware query into one set of openapi params', async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const outDir = join(tmp, '.giri');
+        const giri = join(process.cwd(), 'src', 'index').replace(/\\/g, '/');
+        const zodAdapter = join(process.cwd(), 'src', 'validators', 'zod').replace(/\\/g, '/');
+        await mkdir(join(routesDir, 'items'), { recursive: true });
+        await writeFile(
+            join(routesDir, 'items', '+shared.ts'),
+            [
+                `import { defineMiddleware } from "${giri}";`,
+                'import { z } from "zod";',
+                `import { zod } from "${zodAdapter}";`,
+                'export const middleware = defineMiddleware()({',
+                '  query: zod.query(z.object({ size: z.string().optional() })),',
+                '}, async (c, next) => { await next(); });',
+            ].join('\n'),
+        );
+        await writeFile(
+            join(routesDir, 'items', '+get.ts'),
+            [
+                'import { z } from "zod";',
+                `import { zod } from "${zodAdapter}";`,
+                // The route owns `query` too - merged with the middleware's, not a conflict.
+                'export const query = zod.query(z.object({ filter: z.string().optional() }));',
+                'export const handle = (c) => c.json({ ok: true });',
+            ].join('\n'),
+        );
+
+        await syncProject({ outDir }, { cwd: tmp });
+        const doc = JSON.parse(await readFile(join(outDir, 'openapi.json'), 'utf8'));
+        const names = (doc.paths['/items'].get.parameters as { name: string }[]).map((p) => p.name).sort();
+        expect(names).toEqual(['filter', 'size']);
+    });
+
+    it('merges a route body export with a middleware body into one request schema', async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const outDir = join(tmp, '.giri');
+        const giri = join(process.cwd(), 'src', 'index').replace(/\\/g, '/');
+        const zodAdapter = join(process.cwd(), 'src', 'validators', 'zod').replace(/\\/g, '/');
+        await mkdir(join(routesDir, 'items'), { recursive: true });
+        await writeFile(
+            join(routesDir, 'items', '+shared.ts'),
+            [
+                `import { defineMiddleware } from "${giri}";`,
+                'import { z } from "zod";',
+                `import { zod } from "${zodAdapter}";`,
+                'export const middleware = defineMiddleware()({',
+                '  body: zod.body({ json: z.object({ a: z.string() }) }),',
+                '}, async (c, next) => { await next(); });',
+            ].join('\n'),
+        );
+        await writeFile(
+            join(routesDir, 'items', '+post.ts'),
+            [
+                'import { z } from "zod";',
+                `import { zod } from "${zodAdapter}";`,
+                'export const body = zod.body({ json: z.object({ b: z.string() }) });',
+                'export const handle = (c) => c.json({ ok: true });',
+            ].join('\n'),
+        );
+
+        await syncProject({ outDir }, { cwd: tmp });
+        const doc = JSON.parse(await readFile(join(outDir, 'openapi.json'), 'utf8'));
+        const schema = doc.paths['/items'].post.requestBody.content['application/json'].schema;
+        expect(Object.keys(schema.properties).sort()).toEqual(['a', 'b']);
     });
 
     it("folds a verb file's own middleware vars into its method handle c.get", async () => {

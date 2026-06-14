@@ -193,8 +193,29 @@ const pagination = defineMiddleware(
 );
 ```
 
-Only one applied layer may own each target (`body` or `query`). Giri reports a conflict during app
-construction if middleware and a route export, or two middleware, define the same target.
+When a middleware both injects context vars **and** owns a validator, declare the vars with the
+curried form - the empty `()` takes the `Vars` type argument first so the validator output is still
+inferred (a `Vars` argument on `defineMiddleware(options, ...)` directly would suppress inference and
+erase `c.req.valid(...)` to `any`, so that form is a type error):
+
+```ts
+const pagination = defineMiddleware<{ page: number }>()(
+    {
+        query: zod.query(z.object({ page: z.coerce.number().int().positive() })),
+    },
+    async (c, next) => {
+        c.set("page", c.req.valid("query").page); // valid("query") is typed; c.get("page") is number
+        await next();
+    },
+);
+```
+
+When several applied layers declare the same target (`body` or `query`) - e.g. a `+shared.ts`
+pagination middleware plus a route's own `query` - their validators are **merged**: each runs and
+the validated outputs are combined into the single `c.req.valid(...)` (and one set of OpenAPI
+parameters). Owners run middleware-first, then the route, so a route's fields win on key collisions.
+This mirrors the type layer, which intersects them. Validators are run independently, so a schema
+that rejects unknown keys (e.g. zod `.strict()`) should not be combined with another owner.
 
 Hide a route or subtree from `openapi.json` with `export const openapi = false` (in a verb file
 or a `+shared.ts`). Hidden routes still serve normally.

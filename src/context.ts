@@ -285,6 +285,18 @@ type DefinedMiddleware<
 > = Middleware<Record<string, string>, MiddlewareOptionsInput<Options>, Vars> &
     MiddlewareMetadata<Options>;
 
+// Returned by the curried `defineMiddleware<Vars>()` form. Taking `Vars` on the first
+// (empty) call frees the second call to infer the validator's output; a `Vars` type
+// argument on `defineMiddleware(options, ...)` directly would suppress that inference, since
+// TypeScript has no partial type-argument inference.
+interface MiddlewareBuilder<Vars extends Record<string, unknown>> {
+    <const Options extends MiddlewareOptions>(
+        options: Options,
+        middleware: Middleware<Record<string, string>, MiddlewareOptionsInput<Options>, Vars>,
+    ): DefinedMiddleware<Options, Vars>;
+    (middleware: AnyMiddleware<Vars>): AnyMiddleware<Vars>;
+}
+
 type ExplicitBodyOptions = Omit<MiddlewareOptions, 'body' | 'query'> & {
     body: GiriBodySchema<any>;
     query?: undefined;
@@ -300,49 +312,7 @@ type ExplicitBodyQueryOptions = Omit<MiddlewareOptions, 'body' | 'query'> & {
     query: GiriInputSchema<any>;
 };
 
-export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
-    middleware: AnyMiddleware<Vars>,
-): AnyMiddleware<Vars>;
-export function defineMiddleware<const Options extends MiddlewareOptions>(
-    options: Options,
-    middleware: Middleware<Record<string, string>, MiddlewareOptionsInput<Options>, {}>,
-): DefinedMiddleware<Options, {}>;
-export function defineMiddleware<
-    Vars extends Record<string, unknown>,
-    const Options extends MiddlewareOptions,
->(
-    options: Options,
-    middleware: Middleware<Record<string, string>, MiddlewareOptionsInput<Options>, Vars>,
-): DefinedMiddleware<Options, Vars>;
-export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
-    options: ExplicitBodyQueryOptions,
-    middleware: Middleware<
-        Record<string, string>,
-        MiddlewareOptionsInput<ExplicitBodyQueryOptions>,
-        Vars
-    >,
-): DefinedMiddleware<ExplicitBodyQueryOptions, Vars>;
-export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
-    options: ExplicitBodyOptions,
-    middleware: Middleware<
-        Record<string, string>,
-        MiddlewareOptionsInput<ExplicitBodyOptions>,
-        Vars
-    >,
-): DefinedMiddleware<ExplicitBodyOptions, Vars>;
-export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
-    options: ExplicitQueryOptions,
-    middleware: Middleware<
-        Record<string, string>,
-        MiddlewareOptionsInput<ExplicitQueryOptions>,
-        Vars
-    >,
-): DefinedMiddleware<ExplicitQueryOptions, Vars>;
-export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
-    options: MiddlewareOptions & { body?: never; query?: never },
-    middleware: AnyMiddleware<Vars>,
-): AnyMiddleware<Vars>;
-export function defineMiddleware(
+function applyMiddleware(
     optionsOrMiddleware: MiddlewareOptions | Middleware<any, any, any>,
     maybeMiddleware?: Middleware<any, any, any>,
 ): Middleware<any, any, any> {
@@ -358,6 +328,51 @@ export function defineMiddleware(
     maybeMiddleware.query = optionsOrMiddleware.query;
     maybeMiddleware.openapi = optionsOrMiddleware.openapi;
     return maybeMiddleware;
+}
+
+export function defineMiddleware<Vars extends Record<string, unknown> = {}>(): MiddlewareBuilder<Vars>;
+export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
+    middleware: AnyMiddleware<Vars>,
+): AnyMiddleware<Vars>;
+export function defineMiddleware<const Options extends MiddlewareOptions>(
+    options: Options,
+    middleware: Middleware<Record<string, string>, MiddlewareOptionsInput<Options>, {}>,
+): DefinedMiddleware<Options, {}>;
+export function defineMiddleware<
+    Vars extends Record<string, unknown>,
+    const Options extends MiddlewareOptions,
+>(
+    options: Options,
+    middleware: Middleware<Record<string, string>, MiddlewareOptionsInput<Options>, Vars>,
+): DefinedMiddleware<Options, Vars>;
+export function defineMiddleware<Vars extends Record<string, unknown> = {}>(
+    options: MiddlewareOptions & { body?: never; query?: never },
+    middleware: AnyMiddleware<Vars>,
+): AnyMiddleware<Vars>;
+/**
+ * Guard overload: a `Vars` type argument alongside a `body`/`query` validator suppresses
+ * validator inference (TypeScript has no partial type-argument inference), which used to
+ * silently erase `c.req.valid(...)` to `any`. Use the curried form instead - it takes `Vars`
+ * first so the validator can still be inferred: `defineMiddleware<Vars>()(options, middleware)`.
+ */
+export function defineMiddleware<Vars extends Record<string, unknown>>(
+    options: ExplicitBodyOptions | ExplicitQueryOptions | ExplicitBodyQueryOptions,
+    middleware: 'Pass Vars via the curried form: defineMiddleware<Vars>()(options, middleware)',
+): never;
+export function defineMiddleware(
+    // `string` covers the guard overload's lure parameter; it never reaches here at runtime.
+    optionsOrMiddleware?: MiddlewareOptions | Middleware<any, any, any>,
+    maybeMiddleware?: Middleware<any, any, any> | string,
+): Middleware<any, any, any> | MiddlewareBuilder<any> {
+    // Curried form: `defineMiddleware<Vars>()` returns a builder that applies the same logic.
+    if (optionsOrMiddleware === undefined) {
+        return ((
+            optsOrMw: MiddlewareOptions | Middleware<any, any, any>,
+            mw?: Middleware<any, any, any>,
+        ) => applyMiddleware(optsOrMw, mw)) as MiddlewareBuilder<any>;
+    }
+
+    return applyMiddleware(optionsOrMiddleware, maybeMiddleware as Middleware<any, any, any> | undefined);
 }
 
 /**

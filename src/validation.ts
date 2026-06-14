@@ -2,7 +2,6 @@ import {
     type BodyContentType,
     type GiriBodySchema,
     type GiriInputSchema,
-    type InputValidationResult,
     type RouteInput,
     type TypedResponse,
     type ValidatedInput,
@@ -66,45 +65,51 @@ export function isGiriBodySchema(value: unknown): value is GiriBodySchema {
 }
 
 /**
- * Resolve route and middleware validators into the single input contract exposed by
- * `c.req.valid`. A target can only have one owner so validated data is never silently replaced.
+ * A route/middleware declared a target (`body`/`query`) without wrapping it in a validator.
+ * Branded so callers (e.g. the generator) can tell an actionable config error apart from a
+ * route that merely failed to load.
+ */
+export class RouteInputError extends Error {
+    override readonly name = 'RouteInputError';
+}
+
+/**
+ * Collect every owner's validator for each target (`body`/`query`). A route export and any
+ * applied middleware can each contribute one; their validated outputs are merged at request time
+ * (see {@link prepareRequestInput}), matching the type layer which intersects them. Owners are
+ * kept in source order (middleware first, then the route) so a route's fields win on collision.
  */
 export function resolveRouteInput(sources: readonly RouteInputSource[]): RouteInput | undefined {
-    const input: RouteInput = {};
-    const owners: Partial<Record<keyof RouteInput, string>> = {};
+    const body: GiriBodySchema[] = [];
+    const query: GiriInputSchema[] = [];
 
     for (const source of sources) {
         if (source.body !== undefined) {
             if (!isGiriBodySchema(source.body)) {
-                throw new Error(
+                throw new RouteInputError(
                     `${source.label}: "body" must be wrapped with a validator, e.g. \`zod.body({ json: ... })\` from @boon4681/giri/validators/zod.`,
                 );
             }
-            if (input.body) {
-                throw new Error(
-                    `${source.label}: body validator conflicts with the body validator from ${owners.body}.`,
-                );
-            }
-            input.body = source.body;
-            owners.body = source.label;
+            body.push(source.body);
         }
 
         if (source.query !== undefined) {
             if (!isGiriInputSchema(source.query)) {
-                throw new Error(
+                throw new RouteInputError(
                     `${source.label}: "query" must be wrapped with a validator, e.g. \`zod.query(...)\` from @boon4681/giri/validators/zod.`,
                 );
             }
-            if (input.query) {
-                throw new Error(
-                    `${source.label}: query validator conflicts with the query validator from ${owners.query}.`,
-                );
-            }
-            input.query = source.query;
-            owners.query = source.label;
+            query.push(source.query);
         }
     }
 
+    const input: RouteInput = {};
+    if (body.length > 0) {
+        input.body = body;
+    }
+    if (query.length > 0) {
+        input.query = query;
+    }
     return input.body || input.query ? input : undefined;
 }
 
@@ -165,46 +170,47 @@ function queryObject(url: URL): Record<string, string | string[]> {
     return result;
 }
 
-async function runValidation(
-    schema: GiriInputSchema,
-    value: unknown,
-    label: string,
-): Promise<InputValidationResult> {
-    if (!isGiriInputSchema(schema)) {
-        throw new Error(
-            `giri: ${label} schema must be wrapped with a validator, e.g. \`export const ${label} = zod(...)\` from @boon4681/giri/validators/zod.`,
-        );
+/** Shallow-merge validated outputs from several owners; a single owner keeps its exact value. */
+function mergeValidated(values: unknown[]): unknown {
+    if (values.length === 1) {
+        return values[0];
     }
-    return schema.validate(value);
+    return Object.assign({}, ...values);
 }
 
 export async function prepareRequestInput(request: Request, input?: RouteInput): Promise<PreparedRequestInput> {
     const validated: ValidatedInput = {};
 
-    if (input?.query) {
+    if (input?.query && input.query.length > 0) {
         const query = queryObject(new URL(request.url));
-        const result = await runValidation(input.query, query, 'query');
-        if (!result.ok) {
-            return {
-                ok: false,
-                response: createTypedResponse(
-                    { message: 'Invalid query parameters.', issues: result.issues },
-                    400,
-                    'json',
-                ),
-            };
+        const values: unknown[] = [];
+        for (const schema of input.query) {
+            const result = await schema.validate(query);
+            if (!result.ok) {
+                return {
+                    ok: false,
+                    response: createTypedResponse(
+                        { message: 'Invalid query parameters.', issues: result.issues },
+                        400,
+                        'json',
+                    ),
+                };
+            }
+            values.push(result.value);
         }
-        validated.query = result.value;
+        validated.query = mergeValidated(values);
     }
 
-    if (input?.body) {
-        const contents = input.body.contents as Record<BodyContentType, GiriInputSchema>;
-        const declared = Object.keys(contents) as BodyContentType[];
+    if (input?.body && input.body.length > 0) {
+        // The set of acceptable content-types is the union across every body owner.
+        const declared = [
+            ...new Set(input.body.flatMap((schema) => Object.keys(schema.contents) as BodyContentType[])),
+        ];
         const requested = contentTypeFromHeader(request.headers.get('content-type'));
-        // Pick the schema matching the request's content-type; fall back to JSON when the
-        // header is missing/unrecognized but JSON is on offer (so header-less posts still work).
+        // Pick the type matching the request's content-type; fall back to JSON when the header is
+        // missing/unrecognized but JSON is on offer (so header-less posts still work).
         const chosen: BodyContentType | undefined =
-            requested && contents[requested] ? requested : contents.json ? 'json' : undefined;
+            requested && declared.includes(requested) ? requested : declared.includes('json') ? 'json' : undefined;
 
         if (!chosen) {
             return {
@@ -231,19 +237,30 @@ export async function prepareRequestInput(request: Request, input?: RouteInput):
             };
         }
 
-        const result = await runValidation(contents[chosen], rawBody, 'body');
-        if (!result.ok) {
-            return {
-                ok: false,
-                response: createTypedResponse(
-                    { message: 'Invalid request body.', issues: result.issues },
-                    400,
-                    'json',
-                ),
-            };
+        const values: unknown[] = [];
+        for (const schema of input.body) {
+            const contents = schema.contents as Partial<Record<BodyContentType, GiriInputSchema>>;
+            const contentSchema = contents[chosen];
+            // An owner that doesn't declare the chosen content-type simply contributes nothing.
+            if (!contentSchema) {
+                continue;
+            }
+            const result = await contentSchema.validate(rawBody);
+            if (!result.ok) {
+                return {
+                    ok: false,
+                    response: createTypedResponse(
+                        { message: 'Invalid request body.', issues: result.issues },
+                        400,
+                        'json',
+                    ),
+                };
+            }
+            values.push(result.value);
         }
 
-        validated.body = declared.length > 1 ? { type: chosen, data: result.value } : result.value;
+        const data = mergeValidated(values);
+        validated.body = declared.length > 1 ? { type: chosen, data } : data;
     }
 
     return { ok: true, validated };
