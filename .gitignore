@@ -25,3 +25,4 @@ Thumbs.db
 !.env.test
 .bench
 .yarn*
+.test-web/*
