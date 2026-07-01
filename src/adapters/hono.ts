@@ -186,10 +186,61 @@ function registerHonoRoute(app: Hono, route: GiriRouteRegistration): void {
     throw new Error(`Hono adapter does not support ${route.method}.`);
 }
 
-export function hono(): GiriAdapter<HonoGiriApp> {
+export interface HonoAdapterOptions {
+    /**
+     * App-level error handler, passed straight to `app.onError`. Useful for swallowing client-abort
+     * errors, which crash the Node 24 server if left unhandled:
+     *
+     * ```ts
+     * hono({
+     *   onError: (err, c) => {
+     *     if (err.name === 'AbortError' || err.message.includes('aborted')) {
+     *       return c.body(null, 499); // client already gone; nothing will read this
+     *     }
+     *     console.error(err);
+     *     return c.text('Internal Server Error', 500);
+     *   },
+     * });
+     * ```
+     */
+    onError?: Parameters<Hono['onError']>[0];
+    /** Escape hatch to configure the Hono app directly before routes are registered. */
+    configureApp?: (app: Hono) => void;
+    /**
+     * Swallow client-abort errors at the process level. A client disconnecting mid-response surfaces
+     * as a socket `'error'`/`'clientError'` or, on Node 24, an unhandled `AbortError` that crashes the
+     * server before Hono's pipeline (and thus `onError`) ever sees it. When `true` (the default), those
+     * aborts are caught and dropped; any other error is re-thrown so it still crashes loudly.
+     */
+    handleClientAbort?: boolean;
+}
+
+function isClientAbort(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+    const code = (error as NodeJS.ErrnoException).code;
+    return (
+        error.name === 'AbortError' ||
+        code === 'ECONNRESET' ||
+        code === 'ERR_STREAM_PREMATURE_CLOSE' ||
+        error.message.includes('aborted')
+    );
+}
+
+export function hono(adapterOptions: HonoAdapterOptions = {}): GiriAdapter<HonoGiriApp> {
+    const handleClientAbort = adapterOptions.handleClientAbort ?? true;
+
     return {
         name: 'hono',
-        createApp: () => new Hono({ strict: false }),
+        createApp: () => {
+            const app = new Hono({ strict: false });
+            if (adapterOptions.onError) {
+                app.onError(adapterOptions.onError);
+            }
+            adapterOptions.configureApp?.(app);
+            return app;
+        },
         register: registerHonoRoute,
         fetch: async (app, req) => app.fetch(req),
         serve: (handler, options, onListen) => {
@@ -202,8 +253,28 @@ export function hono(): GiriAdapter<HonoGiriApp> {
                 onListen ? (info) => onListen({ address: info.address, port: info.port }) : undefined,
             );
 
+            let onUncaught: ((error: unknown) => void) | undefined;
+            if (handleClientAbort) {
+                server.on('clientError', (_error, socket) => {
+                    if (socket.writable) {
+                        socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+                    }
+                });
+                onUncaught = (error) => {
+                    if (isClientAbort(error)) {
+                        log.warn('client aborted request', 'request');
+                        return;
+                    }
+                    throw error;
+                };
+                process.on('uncaughtException', onUncaught);
+            }
+
             return {
                 close: () => {
+                    if (onUncaught) {
+                        process.off('uncaughtException', onUncaught);
+                    }
                     return new Promise<void>((resolve, reject) => {
                         server.close((error) => (error ? reject(error) : resolve()));
                     })
