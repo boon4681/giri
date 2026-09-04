@@ -4,9 +4,11 @@ A stupid attempt from a stupid man who lack of foresight trying to make a backen
 
 ![NPM Version](https://img.shields.io/npm/v/%40boon4681%2Fgiri)
 
+<div style="display: flex;">
 <img width="128" src="https://raw.githubusercontent.com/boon4681/giri/refs/heads/main/.image/logo.png" />
+<img style="width: 100%" src="https://raw.githubusercontent.com/boon4681/giri/refs/heads/main/.image/ts7.png" />
+</div>
 
-## F*CK NPM PUBLISH i have to change this package name from `guri` to `giri` to `@boon4681/giri`  because of the name collision and there is no contact about request a package name that hit npm stupid filter.
 
 ## Why does giri exist?
 Because I can, and I am too lazy to write an OpenAPI spec. Write handlers, return values. Giri infers the OpenAPI spec from the handlers, and generates types for params and `openapi.json` from them. Runs on Hono.
