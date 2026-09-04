@@ -5,8 +5,8 @@ A stupid attempt from a stupid man who lack of foresight trying to make a backen
 ![NPM Version](https://img.shields.io/npm/v/%40boon4681%2Fgiri)
 
 <p>
-    <img width="15.8%" height="auto" src="./.image/logo.png" alt="image" />
-    <img width="82%" height="auto" src="./.image/ts7.png" alt="image" />
+    <img width="15.8%" height="auto" src="https://raw.githubusercontent.com/boon4681/giri/refs/heads/main/.image/logo.png" alt="image" />
+    <img width="82%" height="auto" src="https://raw.githubusercontent.com/boon4681/giri/refs/heads/main/.image/ts7.png" alt="image" />
 </p>
 
 
