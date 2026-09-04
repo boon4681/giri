@@ -1,0 +1,4 @@
+- Route responses can now be declared with `zod.response()` or `valibot.response()`, giving handlers status-aware type checking and adding the declared shapes to generated OpenAPI documentation.
+- Fixed new project setup under Yarn by installing the supported TypeScript 5.9 release instead of selecting an incompatible newer compiler.
+- Cached sync and server startup are now faster by reusing route discovery, reading only changed files, and refreshing routes that depend on changed source files.
+- `giri sync --no-watch` now provides explicit one-shot generation for scripts.

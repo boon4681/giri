@@ -5,6 +5,7 @@
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "bin": "./dist/cli.js",
+    "repository": "github:boon4681/giri",
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",
@@ -50,7 +51,9 @@
         "build": "tsx ./build.ts",
         "speed": "yarn bench",
         "test": "vitest --run",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "prepare": "husky || echo ''",
+        "changelog": "tsx scripts/changelog.ts"
     },
     "dependencies": {
         "@clack/prompts": "^1.5.1",
@@ -65,8 +68,11 @@
     "devDependencies": {
         "@hono/node-server": "^2.0.3",
         "@types/node": "^25.9.1",
+        "@types/semver": "^7",
         "@valibot/to-json-schema": "^1.7.0",
         "hono": "^4.12.18",
+        "husky": "^9.1.7",
+        "semver": "^7.8.5",
         "tsup": "^8.4.0",
         "tsx": "^4.22.4",
         "typescript": "^5.9.3",
