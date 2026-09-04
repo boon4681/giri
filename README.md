@@ -11,7 +11,7 @@ A stupid attempt from a stupid man who lack of foresight trying to make a backen
 
 
 ## Why does giri exist?
-Because I can, and I am too lazy to write an OpenAPI spec. Write handlers, return values. Giri infers the OpenAPI spec from the handlers, and generates types for params and `openapi.json` from them. Runs on Hono.
+Because I can and i am too lazy to write OpenAPI spec.
 
 > Status: early and experimental. Hono is the only adapter today; the API will change.
 
