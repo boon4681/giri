@@ -1,6 +1,6 @@
 import * as v from 'valibot';
 import { z } from 'zod';
-import { isGiriBodySchema, isGiriInputSchema } from '../src/validation';
+import { isGiriBodySchema, isGiriInputSchema, isGiriResponseSchema } from '../src/validation';
 import { valibot } from '../src/validators/valibot';
 import { zod } from '../src/validators/zod';
 
@@ -25,6 +25,16 @@ describe('validator adapters', () => {
 
         expect(isGiriInputSchema(query)).toBe(true);
         expect(await query.validate({ page: '2' })).toEqual({ ok: true, value: { page: '2' } });
+    });
+
+    it('wraps response schemas without adding runtime validation', () => {
+        const response = zod.response(z.object({ id: z.string() }));
+
+        expect(isGiriResponseSchema(response)).toBe(true);
+        expect(response.toJsonSchema()).toMatchObject({
+            type: 'object',
+            required: ['id'],
+        });
     });
 
     it('valibot.body() wraps each content-type and exposes JSON Schema', async () => {

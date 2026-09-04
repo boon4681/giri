@@ -12,6 +12,7 @@ import type {
     GiriAdapter,
     GiriBodySchema,
     GiriInputSchema,
+    GiriResponseSchema,
     GiriRouteRegistration,
     Handle,
     HttpMethod,
@@ -22,8 +23,10 @@ import type {
 import {
     defineBodySchema,
     defineInputSchema,
+    defineResponseSchema,
     isGiriBodySchema,
     isGiriInputSchema,
+    isGiriResponseSchema,
     prepareRequestInput,
     resolveRouteInput,
 } from './validation';
@@ -34,9 +37,11 @@ export {
     createTypedResponse,
     defineBodySchema,
     defineInputSchema,
+    defineResponseSchema,
     defineMiddleware,
     isGiriBodySchema,
     isGiriInputSchema,
+    isGiriResponseSchema,
     isTypedResponse,
     prepareRequestInput,
     stack,
@@ -53,6 +58,8 @@ export interface GiriRuntimeRouteModule {
     readonly middleware?: AnyMiddleware | readonly AnyMiddleware[];
     readonly body?: GiriBodySchema;
     readonly query?: GiriInputSchema;
+    /** Output contracts are consumed by generated `$types` and OpenAPI, never at request time. */
+    readonly responses?: Record<number, GiriResponseSchema>;
     readonly config?: {
         readonly skipInherited?: boolean;
     };

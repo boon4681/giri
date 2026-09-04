@@ -96,10 +96,10 @@ export function createContext<
     // No adapter jar => cookies aren't supported, and using them throws.
     const cookies: CookieJar = options.cookies
         ? options.cookies({
-              request: options.request,
-              append: (header) => pending.headers.append('set-cookie', header),
-              secret: options.cookieSecret,
-          })
+            request: options.request,
+            append: (header) => pending.headers.append('set-cookie', header),
+            secret: options.cookieSecret,
+        })
         : unsupportedCookieJar;
 
     const context: Context<Params, Input> = {
@@ -128,8 +128,9 @@ export function createContext<
             store.set(key, value);
         },
         get: (key: string) => store.get(key) as never,
-        json: (data, status, headers) =>
-            createTypedResponse(data, (status ?? defaultStatus()) as never, 'json', headers),
+        json: ((data: unknown, status?: StatusCode, headers?: HeadersInit) =>
+            createTypedResponse(data, (status ?? defaultStatus()) as never, 'json', headers)
+        ) as Context<Params, Input>['json'],
         text: (text, status, headers) =>
             createTypedResponse(text, (status ?? defaultStatus()) as never, 'text', headers),
         html: (html, status, headers) =>

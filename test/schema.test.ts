@@ -13,8 +13,7 @@ function buildProgram(files: string[]): ts.Program {
         strict: true,
         skipLibCheck: true,
         noEmit: true,
-        baseUrl: process.cwd(),
-        paths: { '@boon4681/giri': ['src/index.ts'] },
+        paths: { '@boon4681/giri': ['./src/index.ts'] },
     });
 }
 

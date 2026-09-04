@@ -16,7 +16,12 @@ import type { RouteInputSchemas } from './inputs';
 import { writeManifest } from './manifest';
 import { writeOpenApi } from './openapi';
 import { writeParamTypes, type TypeFolder } from './param-types';
-import { extractRouteMeta, type RouteOpenApiMeta, type RouteSecurity } from './route-meta';
+import {
+    extractRouteMeta,
+    RouteResponseSchemaError,
+    type RouteOpenApiMeta,
+    type RouteSecurity,
+} from './route-meta';
 import { writeRouteTypes } from './route-types';
 import type { RouteResponses } from './schema';
 import { writeTsConfig } from './tsconfig';
@@ -96,6 +101,7 @@ async function extractResponses(paths: GiriPaths, routes: ScannedRoute[]): Promi
 }
 
 interface RuntimeMeta {
+    responsesByFile: Map<string, RouteResponses>;
     inputsByFile: Map<string, RouteInputSchemas>;
     securityByFile: Map<string, RouteSecurity>;
     hiddenFiles: Set<string>;
@@ -109,16 +115,20 @@ async function extractMeta(
     routes: ScannedRoute[],
 ): Promise<RuntimeMeta> {
     const inputsByFile = new Map<string, RouteInputSchemas>();
+    const responsesByFile = new Map<string, RouteResponses>();
     const securityByFile = new Map<string, RouteSecurity>();
     const hiddenFiles = new Set<string>();
     const openapiByFile = new Map<string, RouteOpenApiMeta>();
     if (routes.length === 0) {
-        return { inputsByFile, securityByFile, hiddenFiles, openapiByFile };
+        return { responsesByFile, inputsByFile, securityByFile, hiddenFiles, openapiByFile };
     }
 
     try {
         const meta = await extractRouteMeta(config, paths, routes);
         for (const [file, entry] of meta) {
+            if (entry.responses) {
+                responsesByFile.set(file, entry.responses);
+            }
             if (entry.input) {
                 inputsByFile.set(file, entry.input);
             }
@@ -135,13 +145,13 @@ async function extractMeta(
     } catch (error) {
         // A validator owner conflict is an actionable config error - fail loudly rather than
         // silently shipping a route whose input/openapi is missing.
-        if (error instanceof RouteInputError) {
+        if (error instanceof RouteInputError || error instanceof RouteResponseSchemaError) {
             throw error;
         }
-        console.warn(`giri: skipped input/security generation (${(error as Error).message}).`);
+        console.warn(`giri: skipped route metadata generation (${(error as Error).message}).`);
     }
 
-    return { inputsByFile, securityByFile, hiddenFiles, openapiByFile };
+    return { responsesByFile, inputsByFile, securityByFile, hiddenFiles, openapiByFile };
 }
 
 /**
@@ -181,10 +191,15 @@ export async function syncProject<App>(
     await writeTsConfig(paths, config);
 
     // Response schemas need the generated tsconfig + $types to resolve, so extract last.
-    const data: SyncData = cached ?? {
-        responsesByFile: await extractResponses(paths, routes),
-        ...await extractMeta(config, paths, routes),
-    };
+    let data = cached;
+    if (!data) {
+        const responsesByFile = await extractResponses(paths, routes);
+        const meta = await extractMeta(config, paths, routes);
+        for (const [file, responses] of meta.responsesByFile) {
+            responsesByFile.set(file, responses);
+        }
+        data = { ...meta, responsesByFile };
+    }
     await writeManifest(paths, routes, data);
     await writeOpenApi(paths, routes, data);
     await writeSyncCache(paths, fingerprint, data);

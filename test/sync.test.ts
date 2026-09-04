@@ -112,7 +112,7 @@ describe('syncProject', () => {
             const initial = await syncProject({ outDir }, { cwd: tmp });
             expect(state[counterKey]).toBe(1);
             await expect(readFile(join(outDir, '.sync-cache.json'), 'utf8')).resolves.toContain(
-                '"version": 1',
+                '"version": 2',
             );
 
             const cached = await syncProject({ outDir }, { cwd: tmp });
@@ -153,14 +153,85 @@ describe('syncProject', () => {
             strict: true,
             skipLibCheck: true,
             rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
-            baseUrl: process.cwd(),
             paths: {
-                '@boon4681/giri': ['src/index.ts'],
+                '@boon4681/giri': ['./src/index.ts'],
             },
             types: ['node'],
         });
         const diagnostics = ts.getPreEmitDiagnostics(program);
         expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
+    });
+
+    it('infers a method handle response contract from the route responses export', async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const outDir = join(tmp, '.giri');
+        await mkdir(routesDir, { recursive: true });
+        const routeFile = join(routesDir, '+get.ts');
+        await writeFile(
+            routeFile,
+            [
+                'import { z } from "zod";',
+                'import { zod } from "@boon4681/giri/validators/zod";',
+                'import type { GET } from "./$types";',
+                '',
+                'const user = zod.response(z.object({ id: z.string().min(5), name: z.string() }));',
+                'const missing = zod.response(z.object({ message: z.string() }));',
+                'export const responses = { 200: user, 404: missing };',
+                '',
+                'export const handle: GET = (c) => c.json({ id: "1", name: "Ada" });',
+                '// @ts-expect-error 200 must have the declared user shape',
+                'const invalid: GET = (c) => c.json({}, 200);',
+                'void invalid;',
+                '',
+            ].join('\n'),
+        );
+        await syncProject({ outDir }, { cwd: tmp });
+
+        const types = await readFile(join(outDir, 'types', 'src', 'routes', '$types.d.ts'), 'utf8');
+        expect(types).toContain('RouteResponseOf<typeof import(');
+
+        const program = ts.createProgram([routeFile], {
+            target: ts.ScriptTarget.ES2022,
+            module: ts.ModuleKind.NodeNext,
+            moduleResolution: ts.ModuleResolutionKind.NodeNext,
+            strict: true,
+            skipLibCheck: true,
+            rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
+            paths: {
+                '@boon4681/giri': ['./src/index.ts'],
+                '@boon4681/giri/validators/zod': ['./src/validators/zod.ts'],
+            },
+            types: ['node'],
+        });
+        expect(ts.getPreEmitDiagnostics(program).map((diagnostic) => diagnostic.messageText)).toEqual([]);
+
+        const openapi = JSON.parse(await readFile(join(outDir, 'openapi.json'), 'utf8'));
+        expect(openapi.paths['/'].get.responses['200'].content['application/json'].schema).toEqual({
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+                id: { type: 'string', minLength: 5 },
+                name: { type: 'string' },
+            },
+            required: ['id', 'name'],
+        });
+    });
+
+    it('rejects an invalid responses export instead of silently inferring it', async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        await mkdir(routesDir, { recursive: true });
+        await writeFile(
+            join(routesDir, '+get.ts'),
+            [
+                'export const responses = { 200: {} };',
+                'export const handle = (c: any) => c.json({ ok: true });',
+                '',
+            ].join('\n'),
+        );
+
+        await expect(syncProject({}, { cwd: tmp })).rejects.toThrow(
+            /response 200 must use a Giri response schema/,
+        );
     });
 
     it('infers the body from a verb file (single direct, multi discriminated) via the method handle', async () => {
@@ -197,10 +268,9 @@ describe('syncProject', () => {
             strict: true,
             skipLibCheck: true,
             rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
-            baseUrl: process.cwd(),
             paths: {
-                '@boon4681/giri': ['src/index.ts'],
-                '@boon4681/giri/validators/zod': ['src/validators/zod.ts'],
+                '@boon4681/giri': ['./src/index.ts'],
+                '@boon4681/giri/validators/zod': ['./src/validators/zod.ts'],
             },
             types: ['node'],
         });
@@ -264,10 +334,9 @@ describe('syncProject', () => {
                 strict: true,
                 skipLibCheck: true,
                 rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
-                baseUrl: process.cwd(),
                 paths: {
-                    '@boon4681/giri': ['src/index.ts'],
-                    '@boon4681/giri/validators/zod': ['src/validators/zod.ts'],
+                    '@boon4681/giri': ['./src/index.ts'],
+                    '@boon4681/giri/validators/zod': ['./src/validators/zod.ts'],
                 },
                 types: ['node'],
             },
@@ -349,10 +418,9 @@ describe('syncProject', () => {
                 strict: true,
                 skipLibCheck: true,
                 rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
-                baseUrl: process.cwd(),
                 paths: {
-                    '@boon4681/giri': ['src/index.ts'],
-                    '@boon4681/giri/validators/zod': ['src/validators/zod.ts'],
+                    '@boon4681/giri': ['./src/index.ts'],
+                    '@boon4681/giri/validators/zod': ['./src/validators/zod.ts'],
                 },
                 types: ['node'],
             },
@@ -392,10 +460,9 @@ describe('syncProject', () => {
             moduleResolution: ts.ModuleResolutionKind.NodeNext,
             strict: true,
             skipLibCheck: true,
-            baseUrl: process.cwd(),
             paths: {
-                '@boon4681/giri': ['src/index.ts'],
-                '@boon4681/giri/validators/zod': ['src/validators/zod.ts'],
+                '@boon4681/giri': ['./src/index.ts'],
+                '@boon4681/giri/validators/zod': ['./src/validators/zod.ts'],
             },
             types: ['node'],
         });
@@ -505,8 +572,7 @@ describe('syncProject', () => {
             strict: true,
             skipLibCheck: true,
             rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
-            baseUrl: process.cwd(),
-            paths: { '@boon4681/giri': ['src/index.ts'] },
+            paths: { '@boon4681/giri': ['./src/index.ts'] },
             types: ['node'],
         });
         const diagnostics = ts.getPreEmitDiagnostics(program);
@@ -548,10 +614,9 @@ describe('syncProject', () => {
             strict: true,
             skipLibCheck: true,
             rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
-            baseUrl: process.cwd(),
             paths: {
-                '@boon4681/giri': ['src/index.ts'],
-                '@boon4681/giri/adapters/hono': ['src/adapters/hono.ts'],
+                '@boon4681/giri': ['./src/index.ts'],
+                '@boon4681/giri/adapters/hono': ['./src/adapters/hono.ts'],
             },
             types: ['node'],
         });
@@ -603,10 +668,9 @@ describe('syncProject', () => {
             strict: true,
             skipLibCheck: true,
             rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
-            baseUrl: process.cwd(),
             paths: {
-                '@boon4681/giri': ['src/index.ts'],
-                '@boon4681/giri/adapters/hono': ['src/adapters/hono.ts'],
+                '@boon4681/giri': ['./src/index.ts'],
+                '@boon4681/giri/adapters/hono': ['./src/adapters/hono.ts'],
             },
             types: ['node'],
         });
@@ -660,10 +724,9 @@ describe('syncProject', () => {
             strict: true,
             skipLibCheck: true,
             rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
-            baseUrl: process.cwd(),
             paths: {
-                '@boon4681/giri': ['src/index.ts'],
-                '@boon4681/giri/adapters/hono': ['src/adapters/hono.ts'],
+                '@boon4681/giri': ['./src/index.ts'],
+                '@boon4681/giri/adapters/hono': ['./src/adapters/hono.ts'],
             },
             types: ['node'],
         });
@@ -710,8 +773,7 @@ describe('syncProject', () => {
                 strict: true,
                 skipLibCheck: true,
                 rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
-                baseUrl: process.cwd(),
-                paths: { '@boon4681/giri': ['src/index.ts'] },
+                paths: { '@boon4681/giri': ['./src/index.ts'] },
                 types: ['node'],
             },
         );

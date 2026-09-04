@@ -381,7 +381,7 @@ export async function scanRoutes(routesDir: string): Promise<ScannedRoute[]> {
         if (!method) {
             continue;
         }
-        
+
         const routeDir = dirname(file);
         const routeSegments = physicalRouteSegments(routesDir, routeDir);
         const { path, params } = pathFromSegments(routeSegments);

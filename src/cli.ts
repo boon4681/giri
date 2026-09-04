@@ -19,6 +19,8 @@ interface ParsedFlags {
 
 type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun';
 
+const TYPESCRIPT_PACKAGE = 'typescript@^5.9.3';
+
 interface AdapterChoice {
     value: string;
     label: string;
@@ -293,6 +295,9 @@ async function initProject(cwd: string, flags: InitFlags): Promise<void> {
     const pm = flags.packageManager ?? detectPackageManager();
     const deps = await missingDeps(cwd, ['@boon4681/giri', ...adapter.deps, 'zod']);
     const devDeps = await missingDeps(cwd, ['typescript', '@types/node']);
+    const devDepPackages = devDeps.map((dependency) =>
+        dependency === 'typescript' ? TYPESCRIPT_PACKAGE : dependency,
+    );
 
     if (deps.length === 0 && devDeps.length === 0) {
         prompts.outro('All dependencies already present. Run `giri serve` to start the dev server.');
@@ -301,7 +306,7 @@ async function initProject(cwd: string, flags: InitFlags): Promise<void> {
 
     const planLines = [
         ...(deps.length ? [`  ${pm} ${installArgs(pm, deps, false).join(' ')}`] : []),
-        ...(devDeps.length ? [`  ${pm} ${installArgs(pm, devDeps, true).join(' ')}`] : []),
+        ...(devDepPackages.length ? [`  ${pm} ${installArgs(pm, devDepPackages, true).join(' ')}`] : []),
     ];
 
     let install = flags.install;
@@ -320,13 +325,13 @@ async function initProject(cwd: string, flags: InitFlags): Promise<void> {
 
     if (install) {
         try {
+            if (devDepPackages.length) {
+                prompts.log.step(`Installing dev deps ${devDepPackages.join(', ')}`);
+                await runCommand(pm, installArgs(pm, devDepPackages, true), cwd);
+            }
             if (deps.length) {
                 prompts.log.step(`Installing ${deps.join(', ')}`);
                 await runCommand(pm, installArgs(pm, deps, false), cwd);
-            }
-            if (devDeps.length) {
-                prompts.log.step(`Installing dev deps ${devDeps.join(', ')}`);
-                await runCommand(pm, installArgs(pm, devDeps, true), cwd);
             }
         } catch (error) {
             prompts.log.error(error instanceof Error ? error.message : String(error));

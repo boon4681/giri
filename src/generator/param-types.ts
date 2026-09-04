@@ -87,7 +87,8 @@ function methodExports(typesDir: string, verbs: TypeFolder['verbs']): string[] {
             `import("@boon4681/giri").MiddlewareInputOf<typeof import(${spec})>`,
         ].join(' & ');
         const vars = `Vars & import("@boon4681/giri").MiddlewareVarsOf<typeof import(${spec})>`;
-        return `export type ${method} = import("@boon4681/giri").Handle<Params, ${input}, ${vars}>;`;
+        const output = `import("@boon4681/giri").RouteResponseOf<typeof import(${spec})>`;
+        return `export type ${method} = import("@boon4681/giri").Handle<Params, ${input}, ${vars}, ${output}>;`;
     });
 }
 

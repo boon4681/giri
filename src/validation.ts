@@ -2,11 +2,13 @@ import {
     type BodyContentType,
     type GiriBodySchema,
     type GiriInputSchema,
+    type GiriResponseSchema,
     type RouteInput,
     type TypedResponse,
     type ValidatedInput,
     bodySchemaBrand,
     inputSchemaBrand,
+    responseSchemaBrand,
 } from './types';
 import { createTypedResponse } from './context';
 
@@ -42,8 +44,23 @@ export function defineInputSchema<Output>(
 export function isGiriInputSchema(value: unknown): value is GiriInputSchema {
     return Boolean(
         value &&
-            typeof value === 'object' &&
-            (value as Record<symbol, unknown>)[inputSchemaBrand] === true,
+        typeof value === 'object' &&
+        (value as Record<symbol, unknown>)[inputSchemaBrand] === true,
+    );
+}
+
+/** Build an output schema for a route's `responses` export. Output schemas document and type-check responses only. */
+export function defineResponseSchema<Output>(
+    schema: Omit<GiriResponseSchema<Output>, typeof responseSchemaBrand>,
+): GiriResponseSchema<Output> {
+    return { [responseSchemaBrand]: true, ...schema };
+}
+
+export function isGiriResponseSchema(value: unknown): value is GiriResponseSchema {
+    return Boolean(
+        value &&
+        typeof value === 'object' &&
+        (value as Record<symbol, unknown>)[responseSchemaBrand] === true,
     );
 }
 
@@ -59,8 +76,8 @@ export function defineBodySchema<Outputs extends Partial<Record<BodyContentType,
 export function isGiriBodySchema(value: unknown): value is GiriBodySchema {
     return Boolean(
         value &&
-            typeof value === 'object' &&
-            (value as Record<symbol, unknown>)[bodySchemaBrand] === true,
+        typeof value === 'object' &&
+        (value as Record<symbol, unknown>)[bodySchemaBrand] === true,
     );
 }
 

@@ -104,7 +104,7 @@ function matchAlias(request: string, key: string): string | undefined {
         }
         return undefined;
     }
-    
+
     return request === key ? '' : undefined;
 }
 

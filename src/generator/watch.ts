@@ -89,6 +89,9 @@ export function createWatchUpdater(
             for (const route of affected) {
                 const key = route.file;
                 const entry = meta.get(key);
+                if (entry?.responses) {
+                    data.responsesByFile.set(key, entry.responses);
+                }
                 data.inputsByFile.delete(key);
                 data.securityByFile.delete(key);
                 data.hiddenFiles.delete(key);

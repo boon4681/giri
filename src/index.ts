@@ -13,8 +13,10 @@ export {
 export {
     defineBodySchema,
     defineInputSchema,
+    defineResponseSchema,
     isGiriBodySchema,
     isGiriInputSchema,
+    isGiriResponseSchema,
     prepareRequestInput,
     RouteInputError,
 } from './validation';
@@ -35,6 +37,7 @@ export type {
     GiriConfig,
     GiriFetchHandler,
     GiriInputSchema,
+    GiriResponseSchema,
     GiriPaths,
     GiriRequest,
     GiriRouteRegistration,
@@ -61,6 +64,7 @@ export type {
     Next,
     RouteInput,
     RouteInputOf,
+    RouteResponseOf,
     RouteOpenApi,
     RouteOpenApiConfig,
     SecurityRequirement,

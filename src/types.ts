@@ -103,7 +103,7 @@ declare global {
      * typed without per-route generics (the registration pattern).
      */
     namespace Giri {
-        interface Register {}
+        interface Register { }
     }
 }
 
@@ -137,9 +137,15 @@ export interface Context<
     set<K extends string>(key: K, value: unknown): void;
     get<K extends keyof Vars & string>(key: K): Vars[K];
     get<V = unknown>(key: string): V;
-    json<T, S extends StatusCode = 200>(
+    /** JSON responses without an explicit status are always 200. */
+    json<T>(
         data: T,
-        status?: S,
+        status?: undefined,
+        headers?: HeadersInit,
+    ): TypedResponse<T, 200, 'json'>;
+    json<T, S extends StatusCode>(
+        data: T,
+        status: S,
         headers?: HeadersInit,
     ): TypedResponse<T, S, 'json'>;
     text<S extends StatusCode = 200>(
@@ -181,7 +187,8 @@ export type Handle<
     Params extends Record<string, string> = Record<string, string>,
     Input extends ValidatedInput = ValidatedInput,
     Vars extends Record<string, unknown> = {},
-> = (c: Context<Params, Input, Vars>) => HandlerResponse | Promise<HandlerResponse>;
+    Output extends HandlerResponse = HandlerResponse,
+> = (c: Context<Params, Input, Vars>) => Output | Promise<Output>;
 
 export type Next = () => Promise<HandlerResponse | void>;
 
@@ -242,8 +249,8 @@ export type MergeStack<T> = T extends readonly [infer Head, ...infer Rest]
 export type InferStackVars<T> = T extends readonly [unknown, ...unknown[]]
     ? MergeStack<T>
     : T extends Middleware<any, any, any>
-        ? VarsOf<T>
-        : {};
+    ? VarsOf<T>
+    : {};
 
 /**
  * The vars injected by a module own `middleware` export (a `stack(...)`). Used by the
@@ -258,6 +265,7 @@ export type MiddlewareVarsOf<M> = M extends { middleware: infer Stack }
 export type JsonSchema = Record<string, unknown>;
 
 export const inputSchemaBrand: unique symbol = Symbol.for('giri.input-schema') as never;
+export const responseSchemaBrand: unique symbol = Symbol.for('giri.response-schema') as never;
 
 export type InputValidationResult<Output = unknown> =
     | { ok: true; value: Output }
@@ -272,6 +280,16 @@ export type InputValidationResult<Output = unknown> =
 export interface GiriInputSchema<Output = unknown> {
     readonly [inputSchemaBrand]: true;
     validate(value: unknown): InputValidationResult<Output> | Promise<InputValidationResult<Output>>;
+    toJsonSchema(): JsonSchema;
+}
+
+/**
+ * An output-only schema used by a route's `responses` export. It carries a TypeScript
+ * output type for handler checking and a JSON Schema for generated OpenAPI; responses
+ * are not validated at runtime.
+ */
+export interface GiriResponseSchema<Output = unknown> {
+    readonly [responseSchemaBrand]: true;
     toJsonSchema(): JsonSchema;
 }
 
@@ -304,15 +322,15 @@ type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : 
  */
 export type ValidBody<B> = B extends GiriBodySchema<infer Outputs>
     ? IsUnion<keyof Outputs> extends true
-        ? { [K in keyof Outputs]: { type: K; data: Outputs[K] } }[keyof Outputs]
-        : Outputs[keyof Outputs]
+    ? { [K in keyof Outputs]: { type: K; data: Outputs[K] } }[keyof Outputs]
+    : Outputs[keyof Outputs]
     : never;
 
 /** The validated query a handler receives. */
 export type ValidQuery<Q> = Q extends GiriInputSchema<infer Output> ? Output : never;
 
 /** Drop keys whose value resolved to `never` (an input the route didn't declare). */
-type PruneNever<T> = { [K in keyof T as [T[K]] extends [never] ? never : K]: T[K] };
+type PruneNever<T> = { [K in keyof T as[T[K]] extends [never] ? never : K]: T[K] };
 
 /** Derive validated input from middleware metadata added by `defineMiddleware({ body, query }, ...)`. */
 export type InputOfMiddleware<M> = PruneNever<{
@@ -350,6 +368,25 @@ export type RouteInputOf<M> = PruneNever<{
     body: M extends { body: infer B } ? ValidBody<B> : never;
     query: M extends { query: infer Q } ? ValidQuery<Q> : never;
 }>;
+
+type ResponseStatuses<R> = Extract<keyof R, number>;
+
+type DeclaredResponses<R> = {
+    [Status in ResponseStatuses<R>]: R[Status] extends GiriResponseSchema<infer Output>
+    ? TypedResponse<Output, Status, 'json'>
+    : never;
+}[ResponseStatuses<R>];
+
+/**
+ * Derive the allowed handler return values from a route module's `responses` export.
+ * Each numeric key is an HTTP status and each value is a `GiriResponseSchema`. A raw
+ * `Response` stays allowed as an explicit escape hatch for streams, redirects, etc.
+ */
+export type RouteResponseOf<M> = M extends { responses: infer Responses }
+    ? Responses extends Record<number, GiriResponseSchema>
+    ? Response | DeclaredResponses<Responses>
+    : HandlerResponse
+    : HandlerResponse;
 
 export interface RouteInput {
     // Each owner (route export + every applied middleware) contributes a validator; the

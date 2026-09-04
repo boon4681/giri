@@ -13,6 +13,8 @@ async function main(): Promise<void> {
             'src/typescript-plugin.ts',
         ],
         format: ['cjs'],
+        // @clack/prompts is ESM-only; inline it so the CJS CLI doesn't require() an ES module (fails on Node < 22.12)
+        noExternal: ['@clack/prompts'],
         dts: true,
         sourcemap: true,
         clean: true,

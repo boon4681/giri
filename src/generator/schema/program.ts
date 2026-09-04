@@ -25,7 +25,7 @@ export function createSchemaProgram(
     if (configPath) {
         const parsed = ts.getParsedCommandLineOfConfigFile(configPath, {}, {
             ...ts.sys,
-            onUnRecoverableConfigFileDiagnostic: () => {},
+            onUnRecoverableConfigFileDiagnostic: () => { },
         });
         if (parsed) {
             options = { ...parsed.options, noEmit: true };

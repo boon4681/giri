@@ -1,7 +1,7 @@
 import { toJsonSchema } from '@valibot/to-json-schema';
 import * as v from 'valibot';
-import { defineBodySchema, defineInputSchema } from '../validation';
-import type { BodyContentType, GiriBodySchema, GiriInputSchema } from '../types';
+import { defineBodySchema, defineInputSchema, defineResponseSchema } from '../validation';
+import type { BodyContentType, GiriBodySchema, GiriInputSchema, GiriResponseSchema } from '../types';
 
 type AnySchema = v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
 
@@ -20,6 +20,14 @@ function wrap<Schema extends AnySchema>(schema: Schema): GiriInputSchema<v.Infer
     });
 }
 
+function response<Schema extends AnySchema>(schema: Schema): GiriResponseSchema<v.InferOutput<Schema>> {
+    return defineResponseSchema<v.InferOutput<Schema>>({
+        toJsonSchema() {
+            return toJsonSchema(schema) as Record<string, unknown>;
+        },
+    });
+}
+
 /**
  * Valibot adapter. Peer-depends `valibot` and `@valibot/to-json-schema`.
  *
@@ -32,6 +40,8 @@ function wrap<Schema extends AnySchema>(schema: Schema): GiriInputSchema<v.Infer
  * ```
  */
 export const valibot = {
+    /** Declare a JSON response shape in a route's `responses` map. */
+    response,
     body<Map extends Partial<Record<BodyContentType, AnySchema>>>(
         map: Map,
     ): GiriBodySchema<{ [K in keyof Map]: Map[K] extends AnySchema ? v.InferOutput<Map[K]> : never }> {

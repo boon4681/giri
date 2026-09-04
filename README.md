@@ -134,6 +134,30 @@ export const handle: POST = (c) => {
 `zod.body` can map multiple content types (`json`, `form`) dispatched on `Content-Type` at
 runtime. An unwrapped schema is rejected at build time.
 
+## Responses
+
+Declare response shapes once with a route's `responses` export. The generated method type reads
+it automatically, so `c.json` payloads are checked against the shape for their status code.
+
+```ts
+import { z } from "zod";
+import { zod } from "@boon4681/giri/validators/zod";
+import type { GET } from "./$types";
+
+export const responses = {
+    200: zod.response(z.object({ id: z.string(), name: z.string() })),
+    404: zod.response(z.object({ message: z.string() })),
+};
+
+export const handle: GET = (c) => {
+    return c.json({ id: "1", name: "Ada" }); // status 200
+    // return c.json({}); // type error: `id` and `name` are missing
+};
+```
+
+Use `zod.response(...)` or `valibot.response(...)`. Response schemas document output and type-check
+handlers; Giri does not validate response bodies at runtime.
+
 ## Middleware
 
 Middleware use giri's `(c, next)` shape and live in two places:
@@ -251,14 +275,41 @@ handler as a typed `c.app`, inferred from `init`'s return - no declaration neede
 
 ## CLI
 
-| Command      | What it does                                                                       |
-| ------------ | ---------------------------------------------------------------------------------- |
-| `giri init`  | Scaffold `giri.config.ts`, a starter route, tsconfig paths, and `.gitignore`.      |
-| `giri sync`  | Scan `src/routes` and regenerate `.giri/` (manifest, param types, `openapi.json`). |
-| `giri serve` | `sync`, run `init()`, then serve via the adapter. Watches `src/` and re-syncs.     |
-| `giri build` | Planned - currently a no-op.                                                       |
+```text
+giri init [--adapter hono] [--pm npm|yarn|pnpm|bun] [--install|--no-install] [-y]
+giri sync
+giri serve [--port 3000] [--host 127.0.0.1] [--no-watch]
+giri build
+```
 
-`giri serve` flags: `--port <n>`, `--host <addr>`, `--no-watch`.
+| Command      | What it does                                                                                  |
+| ------------ | --------------------------------------------------------------------------------------------- |
+| `giri init`  | Scaffold a Giri project and optionally install its adapter, validator, and TypeScript tooling. |
+| `giri sync`  | Scan `src/routes` and regenerate `.giri/` (manifest, route types, and `openapi.json`).          |
+| `giri serve` | Sync, run the lifecycle `init()`, start the adapter server, and watch source files.            |
+| `giri build` | Planned; currently a no-op.                                                                    |
+
+Run `giri init` inside a project that already has a `package.json`. It creates
+`giri.config.ts`, `src/routes/+get.ts`, `tsconfig.json`, and `.gitignore` when they do not
+already exist. Dependency installation includes the supported TypeScript 5.9 release line.
+
+### `giri init` options
+
+| Option                              | Description                                                        |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| `--adapter hono`, `-a hono`         | Select the backend adapter. Hono is currently the only adapter.    |
+| `--pm <name>`, `--package-manager <name>` | Use `npm`, `yarn`, `pnpm`, or `bun` for dependency installation. |
+| `--install`                         | Install dependencies without prompting.                           |
+| `--no-install`                      | Only write the scaffold and print the commands that would be run. |
+| `--yes`, `-y`                       | Use defaults non-interactively and install dependencies.          |
+
+### `giri serve` options
+
+| Option                    | Description                                              |
+| ------------------------- | -------------------------------------------------------- |
+| `--port <number>`, `-p`   | Override the configured server port.                     |
+| `--host <address>`        | Override the bind address (`--hostname` is also valid).  |
+| `--no-watch`              | Start without watching source files for changes.         |
 
 ## Generated output (`.giri/`)
 

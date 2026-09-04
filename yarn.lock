@@ -23,7 +23,7 @@ __metadata:
     tinyglobby: "npm:^0.2.16"
     tsup: "npm:^8.4.0"
     tsx: "npm:^4.22.4"
-    typescript: "npm:^5.8.3"
+    typescript: "npm:^5.9.3"
     valibot: "npm:^1.4.1"
     vite-node: "npm:^3.2.4"
     vitest: "npm:^3.2.0"
@@ -32,7 +32,7 @@ __metadata:
     "@hono/node-server": ^2.0.0
     "@valibot/to-json-schema": ^1.0.0
     hono: ^4.12.0
-    typescript: ">=5.4"
+    typescript: ">=5.4 <7"
     valibot: ^1.0.0
     zod: ^4.0.0
   peerDependenciesMeta:
@@ -1829,7 +1829,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:^5.8.3":
+"typescript@npm:^5.9.3":
   version: 5.9.3
   resolution: "typescript@npm:5.9.3"
   bin:
@@ -1839,7 +1839,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A^5.8.3#optional!builtin<compat/typescript>":
+"typescript@patch:typescript@npm%3A^5.9.3#optional!builtin<compat/typescript>":
   version: 5.9.3
   resolution: "typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"
   bin:

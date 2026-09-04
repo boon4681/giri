@@ -80,7 +80,7 @@ export async function pruneDir(dir: string, keep: Set<string>): Promise<void> {
         const full = join(dir, entry.name);
         if (entry.isDirectory()) {
             await pruneDir(full, keep);
-            await rmdir(full).catch(() => {}); // succeeds only if now empty
+            await rmdir(full).catch(() => { }); // succeeds only if now empty
         } else if (!keep.has(full)) {
             await rm(full, { force: true });
             writeCache.delete(full); // a recreated file with identical content must write again

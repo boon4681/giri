@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { defineBodySchema, defineInputSchema } from '../validation';
-import type { BodyContentType, GiriBodySchema, GiriInputSchema } from '../types';
+import { defineBodySchema, defineInputSchema, defineResponseSchema } from '../validation';
+import type { BodyContentType, GiriBodySchema, GiriInputSchema, GiriResponseSchema } from '../types';
 
 /** Wrap a single Zod schema as a giri input schema (validate via `safeParse`, JSON Schema via Zod 4). */
 function wrap<Schema extends z.ZodType>(schema: Schema): GiriInputSchema<z.infer<Schema>> {
@@ -14,6 +14,14 @@ function wrap<Schema extends z.ZodType>(schema: Schema): GiriInputSchema<z.infer
         toJsonSchema() {
             // `unrepresentable: 'any'` keeps types Zod can't render (e.g. `z.instanceof(File)`
             // for a multipart upload) as `{}` instead of throwing the whole conversion away.
+            return z.toJSONSchema(schema, { unrepresentable: 'any' }) as Record<string, unknown>;
+        },
+    });
+}
+
+function response<Schema extends z.ZodType>(schema: Schema): GiriResponseSchema<z.infer<Schema>> {
+    return defineResponseSchema<z.infer<Schema>>({
+        toJsonSchema() {
             return z.toJSONSchema(schema, { unrepresentable: 'any' }) as Record<string, unknown>;
         },
     });
@@ -37,6 +45,8 @@ function wrap<Schema extends z.ZodType>(schema: Schema): GiriInputSchema<z.infer
  * ```
  */
 export const zod = {
+    /** Declare a JSON response shape in a route's `responses` map. */
+    response,
     body<Map extends Partial<Record<BodyContentType, z.ZodType>>>(
         map: Map,
     ): GiriBodySchema<{ [K in keyof Map]: Map[K] extends z.ZodType ? z.infer<Map[K]> : never }> {

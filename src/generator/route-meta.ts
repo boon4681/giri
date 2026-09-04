@@ -4,8 +4,9 @@ import { registerAliasResolver } from '../app';
 import { safeRegister } from '../loader/loader';
 import type { ScannedRoute } from '../routes';
 import type { GiriConfig, GiriPaths, Middleware, SecurityRequirement } from '../types';
-import { resolveRouteInput, RouteInputError } from '../validation';
+import { isGiriResponseSchema, resolveRouteInput, RouteInputError } from '../validation';
 import { bodiesToJsonSchemas, queryToJsonSchema, type RouteInputSchemas } from './inputs';
+import type { JSONSchema, RouteResponses } from './schema';
 import { parseRouteOpenApi } from './schema/route-openapi';
 
 export interface RouteSecurity {
@@ -26,11 +27,20 @@ export interface RouteOpenApiMeta {
 
 export interface RouteMeta {
     input?: RouteInputSchemas;
+    /** Declared response schemas; authoritative over schemas inferred from the handler body. */
+    responses?: RouteResponses;
     security?: RouteSecurity;
     /** Excluded from `openapi.json` (via `openapi`/`+shared.ts` resolution). */
     hidden?: boolean;
     /** Operation metadata (tags/summary/…) resolved down the `+shared.ts` chain. */
     openapi?: RouteOpenApiMeta;
+}
+
+export class RouteResponseSchemaError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'RouteResponseSchemaError';
+    }
 }
 
 type StaticOpenApi =
@@ -96,6 +106,49 @@ function readInput(
         input.query = query;
     }
     return input.body || input.query ? input : undefined;
+}
+
+function readResponses(value: unknown, label: string): RouteResponses | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new RouteResponseSchemaError(`${label}: responses must be an object keyed by HTTP status.`);
+    }
+
+    const result: RouteResponses = { responses: [], opaque: false, warnings: [], $defs: {} };
+    for (const [key, valueSchema] of Object.entries(value)) {
+        const status = Number(key);
+        if (!Number.isSafeInteger(status) || status < 0 || String(status) !== key) {
+            throw new RouteResponseSchemaError(`${label}: response status "${key}" must be a non-negative integer.`);
+        }
+        if (!isGiriResponseSchema(valueSchema)) {
+            throw new RouteResponseSchemaError(
+                `${label}: response ${key} must use a Giri response schema such as zod.response(...).`,
+            );
+        }
+
+        let converted: JSONSchema;
+        try {
+            converted = valueSchema.toJsonSchema();
+        } catch (error) {
+            throw new RouteResponseSchemaError(
+                `${label}: response ${key} cannot be represented as JSON Schema (${(error as Error).message}).`,
+            );
+        }
+        if (!converted || typeof converted !== 'object' || Array.isArray(converted)) {
+            throw new RouteResponseSchemaError(`${label}: response ${key} returned an invalid JSON Schema.`);
+        }
+
+        const { $schema, $defs, ...schema } = converted;
+        void $schema;
+        if ($defs && typeof $defs === 'object' && !Array.isArray($defs)) {
+            Object.assign(result.$defs, $defs as Record<string, JSONSchema>);
+        }
+        result.responses.push({ status, format: 'json', schema });
+    }
+    result.responses.sort((left, right) => Number(left.status) - Number(right.status));
+    return result;
 }
 
 function hasExportModifier(node: ts.Node): boolean {
@@ -594,10 +647,14 @@ export async function extractRouteMeta(
                 const meta: RouteMeta = {};
                 const middleware = collectMiddleware(route, routeModule, loadShared);
                 const input = readInput(routeModule, middleware, route.file);
+                const responses = readResponses(routeModule.responses, route.file);
                 const security = collectSecurity(route, routeModule, loadShared);
                 const { hidden, meta: openapi } = resolveOpenApi(route, routeModule, loadShared);
                 if (input) {
                     meta.input = input;
+                }
+                if (responses) {
+                    meta.responses = responses;
                 }
                 if (security) {
                     meta.security = security;
@@ -608,14 +665,14 @@ export async function extractRouteMeta(
                 if (Object.keys(openapi).length > 0) {
                     meta.openapi = openapi;
                 }
-                if (meta.input || meta.security || meta.hidden || meta.openapi) {
+                if (meta.input || meta.responses || meta.security || meta.hidden || meta.openapi) {
                     byFile.set(route.file, meta);
                 }
             } catch (error) {
-                // A validator conflict is an actionable config error (the same one the app throws
-                // at boot) - surface it instead of silently dropping the route's metadata. A plain
-                // load failure just contributes no metadata.
-                if (error instanceof RouteInputError) {
+                // A validator conflict is an actionable config error (the same one the app throws at boot)
+                // surface it instead of silently dropping the route's metadata.
+                // A plain load failure just contributes no metadata.
+                if (error instanceof RouteInputError || error instanceof RouteResponseSchemaError) {
                     throw error;
                 }
             }
