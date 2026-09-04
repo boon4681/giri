@@ -5,8 +5,8 @@ A stupid attempt from a stupid man who lack of foresight trying to make a backen
 ![NPM Version](https://img.shields.io/npm/v/%40boon4681%2Fgiri)
 
 <p>
-    <img width="128" src="https://raw.githubusercontent.com/boon4681/giri/refs/heads/main/.image/logo.png" alt="image" />
-    <img height="128" src="https://raw.githubusercontent.com/boon4681/giri/refs/heads/main/.image/ts7.png" alt="image" />
+    <img width="15.8%" height="auto" src="./.image/logo.png" alt="image" />
+    <img width="82%" height="auto" src="./.image/ts7.png" alt="image" />
 </p>
 
 
@@ -17,26 +17,30 @@ Because I can, and I am too lazy to write an OpenAPI spec. Write handlers, retur
 
 ## Install
 
+NPM: 
 ```sh
-yarn add @boon4681/giri hono @hono/node-server zod
+npm install @boon4681/giri
 ```
 
-`hono`, `@hono/node-server`, `zod`, `valibot`, and `typescript` are optional peers - install
-only what you use.
+Yarn:
+```sh
+yarn add @boon4681/giri
+```
+
+`giri init` installs TypeScript 5.9 by default because the TypeScript 6 compatibility package currently fails under Yarn's built-in TypeScript patch.
 
 ## Quick start
 
 ```sh
-npx giri init     # scaffold giri.config.ts + src/routes + tsconfig + .gitignore
-npx giri sync     # generate .giri/ (manifest, param types, openapi.json)
-npx giri serve    # sync, then run the dev server (watches src/ and re-syncs)
+mkdir my-giri-app
+cd my-giri-app
+npm init -y
+npx @boon4681/giri init --pm npm -y
+npx giri serve
 ```
 
-Then hit it:
-
-```sh
-curl http://localhost:3000/
-```
+`serve` generates `.giri/` before starting and watches the source tree. Run `npx giri sync`
+when you only want to regenerate the manifest, route types, and OpenAPI document.
 
 ## Config
 
