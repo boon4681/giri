@@ -8,6 +8,9 @@ import { isGiriResponseSchema, resolveRouteInput, RouteInputError } from '../val
 import { bodiesToJsonSchemas, queryToJsonSchema, type RouteInputSchemas } from './inputs';
 import type { JSONSchema, RouteResponses } from './schema';
 import { parseRouteOpenApi } from './schema/route-openapi';
+import { RouteResponseSchemaError } from './errors';
+
+export { RouteResponseSchemaError } from './errors';
 
 export interface RouteSecurity {
     /** Operation-level `security` requirements, e.g. `[{ bearerAuth: [] }]`. */
@@ -34,13 +37,6 @@ export interface RouteMeta {
     hidden?: boolean;
     /** Operation metadata (tags/summary/…) resolved down the `+shared.ts` chain. */
     openapi?: RouteOpenApiMeta;
-}
-
-export class RouteResponseSchemaError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'RouteResponseSchemaError';
-    }
 }
 
 type StaticOpenApi =

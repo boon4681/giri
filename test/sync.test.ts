@@ -110,16 +110,24 @@ describe('syncProject', () => {
         try {
             await writeFile(routeFile, routeSource());
             const initial = await syncProject({ outDir }, { cwd: tmp });
+            expect(initial.cacheHit).toBe(false);
             expect(state[counterKey]).toBe(1);
             await expect(readFile(join(outDir, '.sync-cache.json'), 'utf8')).resolves.toContain(
-                '"version": 2',
+                '"version": 3',
             );
 
             const cached = await syncProject({ outDir }, { cwd: tmp });
+            expect(cached.cacheHit).toBe(true);
             expect(state[counterKey]).toBe(1);
             expect(cached.data.responsesByFile.get(cached.routes[0].file)).toEqual(
                 initial.data.responsesByFile.get(initial.routes[0].file),
             );
+
+            await mkdir(join(tmp, 'src', 'lib'), { recursive: true });
+            await writeFile(join(tmp, 'src', 'lib', 'unrelated.ts'), 'export const unrelated = true;');
+            const unrelated = await syncProject({ outDir }, { cwd: tmp });
+            expect(unrelated.cacheHit).toBe(false);
+            expect(state[counterKey]).toBe(1);
 
             await writeFile(routeFile, routeSource('// changed'));
             await syncProject({ outDir }, { cwd: tmp });

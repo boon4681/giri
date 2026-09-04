@@ -1,7 +1,7 @@
 import Module from 'node:module';
 import { isAbsolute, join, resolve } from 'node:path';
 import { safeRegister } from './loader/loader';
-import { assertRouteHandleExport, scanRoutes, type ScannedRoute } from './routes';
+import { scanRoutes, type ScannedRoute } from './routes';
 import type {
     GiriConfig,
     GiriPaths,
@@ -24,6 +24,10 @@ export interface BuildGiriAppOptions {
     loaderRegistered?: boolean;
     /** The caller owns a persistent project-alias resolver for lazy route evaluation. */
     aliasResolverRegistered?: boolean;
+    /** Reuse routes already discovered by sync instead of scanning the tree again. */
+    routes?: ScannedRoute[];
+    /** Validate lazy route exports eagerly. Disable to make loading fully lazy. */
+    validateRoutes?: boolean;
 }
 
 export interface BuiltGiriApp<App> {
@@ -206,8 +210,9 @@ export async function buildGiriApp<App>(
     options: BuildGiriAppOptions = {},
 ): Promise<BuiltGiriApp<App>> {
     const paths = resolveGiriPaths(config, options.cwd);
-    const routes = await scanRoutes(paths.routesDir);
-    if (options.lazy) {
+    const routes = options.routes ?? await scanRoutes(paths.routesDir);
+    if (options.lazy && options.validateRoutes !== false) {
+        const { assertRouteHandleExport } = await import('./route-validation.js');
         for (const route of routes) {
             assertRouteHandleExport(route.file);
         }

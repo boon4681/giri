@@ -6,7 +6,7 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import * as prompts from '@clack/prompts';
 import { buildGiriApp, registerAliasResolver } from './app';
 import { findConfigPath, load, safeRegister } from './loader/loader';
-import { createWatchUpdater, syncProject } from './generator';
+import { syncProject } from './generator/sync';
 import { loadLifecycle, runInit } from './lifecycle';
 import { color, formatError, log, muted } from './logger';
 import type { Services, GiriConfig, GiriFetchHandler } from './types';
@@ -60,7 +60,7 @@ function help(): void {
 
 Usage:
   giri init [--adapter hono] [--pm npm|yarn|pnpm|bun] [--no-install] [-y]
-  giri sync
+  giri sync [--no-watch]
   giri serve [--port 3000] [--host 127.0.0.1] [--no-watch]
   giri build
 `);
@@ -111,6 +111,14 @@ function parseFlags(args: string[]): ParsedFlags {
     }
 
     return flags;
+}
+
+function parseSyncFlags(args: string[]): void {
+    for (const arg of args) {
+        if (arg !== '--no-watch') throw new Error(`Unknown option: ${arg}`);
+    }
+    // sync is deliberately one-shot. The explicit flag is useful in scripts where callers want
+    // to document that no long-lived file watcher may be started.
 }
 
 async function ensureGitignore(cwd: string): Promise<void> {
@@ -207,7 +215,7 @@ function runCommand(cmd: string, args: string[], cwd: string): Promise<void> {
 
 function configSource(adapter: AdapterChoice): string {
     return [
-        'import { defineConfig } from "@boon4681/giri";',
+        'import { defineConfig } from "@boon4681/giri/config";',
         adapter.importLine,
         '',
         'export default defineConfig({',
@@ -382,6 +390,8 @@ async function serveProject(config: GiriConfig, flags: ParsedFlags): Promise<voi
             lazy: true,
             loaderRegistered: true,
             aliasResolverRegistered: true,
+            routes: initial.routes,
+            validateRoutes: false,
         });
 
         const port = flags.port ?? cfg.server?.port ?? 3000;
@@ -395,6 +405,7 @@ async function serveProject(config: GiriConfig, flags: ParsedFlags): Promise<voi
                 let timer: NodeJS.Timeout | undefined;
                 let syncing = false;
                 const changed = new Set<string>();
+                const { createWatchUpdater } = await import('./generator/watch.js');
                 const updater = createWatchUpdater(cfg, initial);
                 const hmrCount = new Map<string, number>();
                 const bump = (key: string): number => {
@@ -443,6 +454,8 @@ async function serveProject(config: GiriConfig, flags: ParsedFlags): Promise<voi
                                     lazy: true,
                                     loaderRegistered: true,
                                     aliasResolverRegistered: true,
+                                    routes: fullSync ? undefined : current.routes,
+                                    validateRoutes: false,
                                 });
                             }
                         }
@@ -579,6 +592,7 @@ async function main(): Promise<void> {
     const config = await load();
 
     if (command === 'sync') {
+        parseSyncFlags(args);
         const result = await syncProject(config);
         log.success(
             `synced ${result.routes.length} route${result.routes.length === 1 ? '' : 's'} ${muted(`at ${result.paths.outDir}`)}`,

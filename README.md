@@ -39,8 +39,9 @@ npx @boon4681/giri init --pm npm -y
 npx giri serve
 ```
 
-`serve` generates `.giri/` before starting and watches the source tree. Run `npx giri sync`
-when you only want to regenerate the manifest, route types, and OpenAPI document.
+`serve` generates `.giri/` before starting and watches the source tree. Run
+`npx giri sync --no-watch` when you only want to regenerate the manifest, route types, and
+OpenAPI document once.
 
 ## Config
 
@@ -48,7 +49,7 @@ when you only want to regenerate the manifest, route types, and OpenAPI document
 side effects (no DB drivers here; see [Lifecycle](#lifecycle)).
 
 ```ts
-import { defineConfig } from "@boon4681/giri";
+import { defineConfig } from "@boon4681/giri/config";
 import { hono } from "@boon4681/giri/adapters/hono";
 
 export default defineConfig({
@@ -277,7 +278,7 @@ handler as a typed `c.app`, inferred from `init`'s return - no declaration neede
 
 ```text
 giri init [--adapter hono] [--pm npm|yarn|pnpm|bun] [--install|--no-install] [-y]
-giri sync
+giri sync [--no-watch]
 giri serve [--port 3000] [--host 127.0.0.1] [--no-watch]
 giri build
 ```
@@ -285,7 +286,7 @@ giri build
 | Command      | What it does                                                                                  |
 | ------------ | --------------------------------------------------------------------------------------------- |
 | `giri init`  | Scaffold a Giri project and optionally install its adapter, validator, and TypeScript tooling. |
-| `giri sync`  | Scan `src/routes` and regenerate `.giri/` (manifest, route types, and `openapi.json`).          |
+| `giri sync [--no-watch]` | Scan `src/routes` and regenerate `.giri/` once. `--no-watch` explicitly guarantees one-shot operation for scripts. |
 | `giri serve` | Sync, run the lifecycle `init()`, start the adapter server, and watch source files.            |
 | `giri build` | Planned; currently a no-op.                                                                    |
 

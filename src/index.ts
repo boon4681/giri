@@ -22,7 +22,7 @@ export {
 } from './validation';
 export { buildGiriApp, resolveGiriPaths } from './app';
 export { scanRoutes } from './routes';
-export { syncProject } from './generator';
+export { syncProject } from './generator/sync';
 export { loadLifecycle, runInit } from './lifecycle';
 export type { GiriLifecycle } from './lifecycle';
 export type {

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { resolveGiriPaths } from '../app';
 import {
     routeParamsForDir,
@@ -16,20 +16,16 @@ import type { RouteInputSchemas } from './inputs';
 import { writeManifest } from './manifest';
 import { writeOpenApi } from './openapi';
 import { writeParamTypes, type TypeFolder } from './param-types';
-import {
-    extractRouteMeta,
-    RouteResponseSchemaError,
-    type RouteOpenApiMeta,
-    type RouteSecurity,
-} from './route-meta';
+import { RouteResponseSchemaError } from './errors';
+import type { RouteOpenApiMeta, RouteSecurity } from './route-meta';
 import { writeRouteTypes } from './route-types';
 import type { RouteResponses } from './schema';
 import { writeTsConfig } from './tsconfig';
 import { assertSafeOutDir, pruneDir, slash, typeFilePath } from './util';
 import {
-    readSyncCache,
+    createSyncSnapshot,
+    readSyncCacheState,
     SYNC_CACHE_NAME,
-    syncFingerprint,
     writeSyncCache,
 } from './cache';
 
@@ -70,6 +66,8 @@ export interface SyncResult {
     folders: TypeFolder[];
     /** Aggregated route metadata, so a watcher can update one route and re-serialize. */
     data: SyncData;
+    /** True when metadata and generated files were reusable without extraction. */
+    cacheHit: boolean;
 }
 
 /**
@@ -124,6 +122,7 @@ async function extractMeta(
     }
 
     try {
+        const { extractRouteMeta } = await import('./route-meta.js');
         const meta = await extractRouteMeta(config, paths, routes);
         for (const [file, entry] of meta) {
             if (entry.responses) {
@@ -167,10 +166,16 @@ export async function syncProject<App>(
     const paths = resolveGiriPaths(config, options.cwd);
     assertSafeOutDir(paths);
     const hadOutDir = existsSync(paths.outDir);
-    const routes = await scanRoutes(paths.routesDir);
-    const folders = await typeFolders(paths, routes);
-    const fingerprint = await syncFingerprint(config, paths);
-    const cached = await readSyncCache(paths, fingerprint);
+    const cache = await readSyncCacheState(paths);
+    const [routes, folders, snapshot] = await Promise.all([
+        scanRoutes(paths.routesDir),
+        typeFolders(paths, []),
+        createSyncSnapshot(config, paths, cache?.files),
+    ]);
+    // Fill verbs after the directory walk has completed without repeating that walk.
+    const folderByDir = new Map(folders.map((folder) => [slash(folder.dir), folder]));
+    for (const route of routes) folderByDir.get(slash(route.routeDir))?.verbs.push({ method: route.method, file: route.file });
+    const cached = cache?.fingerprint === snapshot.fingerprint ? cache.data : undefined;
 
     const generatedFiles = [
         join(paths.outDir, 'tsconfig.json'),
@@ -181,7 +186,7 @@ export async function syncProject<App>(
         ...folders.map((folder) => typeFilePath(paths, folder.dir)),
     ];
     if (cached && generatedFiles.every(existsSync)) {
-        return { paths, routes, folders, data: cached };
+        return { paths, routes, folders, data: cached, cacheHit: true };
     }
 
     await mkdir(paths.outDir, { recursive: true });
@@ -192,6 +197,55 @@ export async function syncProject<App>(
 
     // Response schemas need the generated tsconfig + $types to resolve, so extract last.
     let data = cached;
+    const routeShape = (route: ScannedRoute) => ({
+        file: slash(relative(paths.cwd, route.file)),
+        method: route.method,
+        path: route.path,
+        sharedFiles: route.sharedFiles.map((file) => slash(relative(paths.cwd, file))),
+    });
+    const sameStructure = cache && JSON.stringify(routes.map(routeShape)) === JSON.stringify(cache.routes);
+    const changed = [...snapshot.changedFiles, ...snapshot.removedFiles];
+    const canIncrement = cache && sameStructure && snapshot.removedFiles.length === 0 && changed.length > 0 &&
+        changed.every((file) => slash(relative(paths.cwd, file)).startsWith('src/')) &&
+        !changed.some((file) => /^src\/main\.(?:[cm]?[jt]s|[jt]sx)$/i.test(slash(relative(paths.cwd, file))));
+
+    if (!data && canIncrement) {
+        const [{ buildImportGraph }, { collectDependents }] = await Promise.all([
+            import('../loader/import-graph.js'),
+            import('../loader/module-loader.js'),
+        ]);
+        const graph = await buildImportGraph(config, paths.cwd);
+        const dependents = new Set<string>();
+        for (const file of changed) {
+            for (const dependent of collectDependents(graph, slash(file))) dependents.add(dependent);
+        }
+        const affected = routes.filter((route) => dependents.has(slash(route.file)) ||
+            route.sharedFiles.some((file) => dependents.has(slash(file))));
+        data = cache.data;
+        if (affected.length > 0) {
+            for (const route of affected) {
+                data.responsesByFile.delete(route.file);
+                data.inputsByFile.delete(route.file);
+                data.securityByFile.delete(route.file);
+                data.hiddenFiles.delete(route.file);
+                data.openapiByFile.delete(route.file);
+            }
+            const responses = await extractResponses(paths, affected);
+            const meta = await extractMeta(config, paths, affected);
+            for (const route of affected) {
+                const file = route.file;
+                const entry = meta.responsesByFile.get(file) ?? responses.get(file);
+                if (entry) data.responsesByFile.set(file, entry);
+                const input = meta.inputsByFile.get(file);
+                if (input) data.inputsByFile.set(file, input);
+                const security = meta.securityByFile.get(file);
+                if (security) data.securityByFile.set(file, security);
+                if (meta.hiddenFiles.has(file)) data.hiddenFiles.add(file);
+                const openapi = meta.openapiByFile.get(file);
+                if (openapi) data.openapiByFile.set(file, openapi);
+            }
+        }
+    }
     if (!data) {
         const responsesByFile = await extractResponses(paths, routes);
         const meta = await extractMeta(config, paths, routes);
@@ -202,7 +256,7 @@ export async function syncProject<App>(
     }
     await writeManifest(paths, routes, data);
     await writeOpenApi(paths, routes, data);
-    await writeSyncCache(paths, fingerprint, data);
+    await writeSyncCache(paths, snapshot.fingerprint, data, snapshot.files, routes);
 
     if (hadOutDir) {
         await pruneDir(
@@ -219,5 +273,5 @@ export async function syncProject<App>(
         );
     }
 
-    return { paths, routes, folders, data };
+    return { paths, routes, folders, data, cacheHit: false };
 }

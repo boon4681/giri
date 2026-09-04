@@ -5,6 +5,7 @@ async function main(): Promise<void> {
     await build({
         entry: [
             'src/index.ts',
+            'src/config.ts',
             'src/runtime.ts',
             'src/cli.ts',
             'src/adapters/hono.ts',

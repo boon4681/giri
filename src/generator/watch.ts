@@ -1,22 +1,16 @@
 import { existsSync, statSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { buildImportGraph } from '../loader/import-graph';
 import {
     collectDependents,
     purgeGeneratedModules,
     purgeModules,
     purgeProjectModules,
 } from '../loader/module-loader';
-import {
-    assertRouteHandleExport,
-    assertSourceSyntax,
-    type ScannedRoute,
-} from '../routes';
+import type { ScannedRoute } from '../routes';
 import type { GiriConfig } from '../types';
 import { writeManifest } from './manifest';
 import { writeOpenApi } from './openapi';
-import { extractRouteMeta } from './route-meta';
-import { syncFingerprint, writeSyncCache } from './cache';
+import { createSyncSnapshot, writeSyncCache } from './cache';
 import { syncProject, type SyncResult } from './sync';
 import { slash } from './util';
 
@@ -85,6 +79,7 @@ export function createWatchUpdater(
         }
 
         try {
+            const { extractRouteMeta } = await import('./route-meta.js');
             const meta = await extractRouteMeta(config, paths, affected);
             for (const route of affected) {
                 const key = route.file;
@@ -137,6 +132,7 @@ export function createWatchUpdater(
 
             // TypeScript can still produce a partial AST for malformed source. Reject its parse
             // diagnostics before logging an update or replacing the last working app.
+            const { assertRouteHandleExport, assertSourceSyntax } = await import('../route-validation.js');
             assertSourceSyntax(abs);
 
             const isRoute = routes.some((candidate) => slash(candidate.file) === file);
@@ -161,6 +157,7 @@ export function createWatchUpdater(
                 return fullResync();
             }
 
+            const { buildImportGraph } = await import('../loader/import-graph.js');
             const graph = await buildImportGraph(config, paths.cwd);
             if (!graph.nodes.has(file) && !isRoute && !isShared) {
                 return fullResync();
@@ -176,7 +173,8 @@ export function createWatchUpdater(
                 await reextractRoutes(affected);
                 await writeManifest(paths, routes, data);
                 await writeOpenApi(paths, routes, data);
-                await writeSyncCache(paths, await syncFingerprint(config, paths), data);
+                const snapshot = await createSyncSnapshot(config, paths);
+                await writeSyncCache(paths, snapshot.fingerprint, data, snapshot.files, routes);
                 purgeGeneratedModules(paths.outDir);
             };
             const task = metadataQueue.then(refreshMetadata);
