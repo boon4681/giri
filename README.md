@@ -4,10 +4,10 @@ A stupid attempt from a stupid man who lack of foresight trying to make a backen
 
 ![NPM Version](https://img.shields.io/npm/v/%40boon4681%2Fgiri)
 
-<div style="display: flex;">
-<img width="128" src="https://raw.githubusercontent.com/boon4681/giri/refs/heads/main/.image/logo.png" />
-<img style="width: 100%" src="https://raw.githubusercontent.com/boon4681/giri/refs/heads/main/.image/ts7.png" />
-</div>
+<p>
+    <img width="128" src="https://raw.githubusercontent.com/boon4681/giri/refs/heads/main/.image/logo.png" alt="image" />
+    <img height="128" src="https://raw.githubusercontent.com/boon4681/giri/refs/heads/main/.image/ts7.png" alt="image" />
+</p>
 
 
 ## Why does giri exist?
