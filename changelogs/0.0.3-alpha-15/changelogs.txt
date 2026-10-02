@@ -1,0 +1,6 @@
+# One change per line, prefixed with "-". Lines starting with "#" are ignored.
+# Entries are markdown: **bold**, [link](url), image ![alt](./file.png), video ![alt](./clip.mp4).
+# Put media files next to this file; ./name resolves to this folder and moves with it on publish.
+# A line without a "-" continues the entry above it, e.g. a media line under its entry.
+# Publish with: yarn changelog publish <version>
+- You can now build a runnable server bundle with `giri build`, choose where to save it, reduce its size, include dependencies, and select ESM or CommonJS output.
