@@ -62,7 +62,7 @@ Usage:
   giri init [--adapter hono] [--pm npm|yarn|pnpm|bun] [--no-install] [-y]
   giri sync [--no-watch]
   giri serve [--port 3000] [--host 127.0.0.1] [--no-watch]
-  giri build
+  giri build [--out dist] [--minify] [--include-deps] [--format esm|cjs]
 `);
 }
 
@@ -105,6 +105,42 @@ function parseFlags(args: string[]): ParsedFlags {
             flags.hostname = args[++index];
         } else if (arg === '--no-watch') {
             flags.watch = false;
+        } else {
+            throw new Error(`Unknown option: ${arg}`);
+        }
+    }
+
+    return flags;
+}
+
+interface BuildFlags {
+    outDir?: string;
+    minify: boolean;
+    includeDeps: boolean;
+    format?: 'esm' | 'cjs';
+}
+
+function parseBuildFlags(args: string[]): BuildFlags {
+    const flags: BuildFlags = { minify: false, includeDeps: false };
+
+    for (let index = 0; index < args.length; index += 1) {
+        const arg = args[index];
+        if (arg === '--out' || arg === '--outdir') {
+            const value = args[++index];
+            if (!value) {
+                throw new Error('Missing value for --out');
+            }
+            flags.outDir = value;
+        } else if (arg === '--minify') {
+            flags.minify = true;
+        } else if (arg === '--include-deps') {
+            flags.includeDeps = true;
+        } else if (arg === '--format') {
+            const value = args[++index];
+            if (value !== 'esm' && value !== 'cjs') {
+                throw new Error('--format must be esm or cjs');
+            }
+            flags.format = value;
         } else {
             throw new Error(`Unknown option: ${arg}`);
         }
@@ -585,7 +621,24 @@ async function main(): Promise<void> {
     }
 
     if (command === 'build') {
-        log.warn('build is planned, but is currently a no-op', 'build');
+        const flags = parseBuildFlags(args);
+        const config = await load();
+        const { buildProject } = await import('./generator/build.js');
+        const result = await buildProject(config, {
+            cwd,
+            outDir: flags.outDir,
+            minify: flags.minify,
+            includeDeps: flags.includeDeps,
+            format: flags.format,
+        });
+        const shown = relative(cwd, result.outFile);
+        log.success(
+            `built ${result.routeCount} route${result.routeCount === 1 ? '' : 's'} ${muted(`at ${shown.startsWith('..') ? result.outFile : shown}`)}`,
+            'build',
+        );
+        if (result.routeCount === 0) {
+            log.warn('no routes found under src/routes', 'build');
+        }
         return;
     }
 
