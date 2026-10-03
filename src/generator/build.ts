@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { build, type Plugin } from 'esbuild';
+import { build, type OnResolveArgs, type Plugin } from 'esbuild';
 import { resolveAliasRequest, resolveGiriPaths } from '../app';
 import { findConfigPath } from '../loader/loader';
 import { scanRoutes, type ScannedRoute } from '../routes';
@@ -245,16 +245,23 @@ function bundlePlugin(cwd: string, alias: GiriConfig['alias'], giriOutDir: strin
                 resolveDir: giriPackageDir(),
             }));
 
+            const resolveFile = (path: string, args: OnResolveArgs) =>
+                pluginBuild.resolve(path, {
+                    kind: args.kind,
+                    importer: args.importer,
+                    resolveDir: args.resolveDir,
+                });
+
             pluginBuild.onResolve({ filter: /.*/ }, (args) => {
                 if (args.path.startsWith('.') || isAbsolute(args.path)) {
                     return undefined;
                 }
                 if (args.path.startsWith('$giri/')) {
-                    return { path: join(giriOutDir, args.path.slice('$giri/'.length)) };
+                    return resolveFile(join(giriOutDir, args.path.slice('$giri/'.length)), args);
                 }
                 const aliased = resolveAliasRequest(args.path, alias, cwd);
                 if (aliased) {
-                    return { path: aliased };
+                    return resolveFile(aliased, args);
                 }
                 const subpath = giriSubpath(args.path);
                 if (subpath) {
