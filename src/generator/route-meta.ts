@@ -37,6 +37,8 @@ export interface RouteMeta {
     hidden?: boolean;
     /** Operation metadata (tags/summary/…) resolved down the `+shared.ts` chain. */
     openapi?: RouteOpenApiMeta;
+    /** Non-fatal problems found while extracting, kept so a cached sync can repeat them. */
+    warnings?: string[];
 }
 
 type StaticOpenApi =
@@ -83,6 +85,7 @@ function readInput(
     routeModule: Record<string, unknown>,
     middleware: Middleware[],
     label: string,
+    warnings: string[],
 ): RouteInputSchemas | undefined {
     const resolved = resolveRouteInput([
         ...middleware.map((fn, index) => ({
@@ -93,8 +96,11 @@ function readInput(
         { label, body: routeModule.body, query: routeModule.query },
     ]);
     const input: RouteInputSchemas = {};
-    const body = bodiesToJsonSchemas(resolved?.body, label);
-    const query = queryToJsonSchema(resolved?.query, label);
+    const warn = (message: string): void => {
+        warnings.push(message);
+    };
+    const body = bodiesToJsonSchemas(resolved?.body, label, warn);
+    const query = queryToJsonSchema(resolved?.query, label, warn);
     if (body) {
         input.body = body;
     }
@@ -453,7 +459,8 @@ function extractRuntimeSharedMeta(
 ): RouteMeta {
     const meta: RouteMeta = {};
     const middleware = collectMiddleware(route, {}, loadShared);
-    const input = readInput({}, middleware, route.file);
+    const warnings: string[] = [];
+    const input = readInput({}, middleware, route.file, warnings);
     const security = collectSecurity(route, {}, loadShared);
     const { hidden, meta: openapi } = resolveOpenApi(route, { openapi: routeModule.openapi }, loadShared);
     if (input) {
@@ -467,6 +474,9 @@ function extractRuntimeSharedMeta(
     }
     if (Object.keys(openapi).length > 0) {
         meta.openapi = openapi;
+    }
+    if (warnings.length > 0) {
+        meta.warnings = warnings;
     }
     return meta;
 }
@@ -633,7 +643,7 @@ export async function extractRouteMeta(
     try {
         for (const { route, routeModule } of runtimeSharedRoutes) {
             const meta = extractRuntimeSharedMeta(route, routeModule, loadShared);
-            if (meta.input || meta.security || meta.hidden || meta.openapi) {
+            if (meta.input || meta.security || meta.hidden || meta.openapi || meta.warnings) {
                 byFile.set(route.file, meta);
             }
         }
@@ -642,7 +652,8 @@ export async function extractRouteMeta(
                 const routeModule = loadModule(route.file);
                 const meta: RouteMeta = {};
                 const middleware = collectMiddleware(route, routeModule, loadShared);
-                const input = readInput(routeModule, middleware, route.file);
+                const warnings: string[] = [];
+                const input = readInput(routeModule, middleware, route.file, warnings);
                 const responses = readResponses(routeModule.responses, route.file);
                 const security = collectSecurity(route, routeModule, loadShared);
                 const { hidden, meta: openapi } = resolveOpenApi(route, routeModule, loadShared);
@@ -661,7 +672,10 @@ export async function extractRouteMeta(
                 if (Object.keys(openapi).length > 0) {
                     meta.openapi = openapi;
                 }
-                if (meta.input || meta.responses || meta.security || meta.hidden || meta.openapi) {
+                if (warnings.length > 0) {
+                    meta.warnings = warnings;
+                }
+                if (meta.input || meta.responses || meta.security || meta.hidden || meta.openapi || meta.warnings) {
                     byFile.set(route.file, meta);
                 }
             } catch (error) {

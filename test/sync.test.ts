@@ -113,7 +113,7 @@ describe('syncProject', () => {
             expect(initial.cacheHit).toBe(false);
             expect(state[counterKey]).toBe(1);
             await expect(readFile(join(outDir, '.sync-cache.json'), 'utf8')).resolves.toContain(
-                '"version": 3',
+                '"version": 4',
             );
 
             const cached = await syncProject({ outDir }, { cwd: tmp });
@@ -134,6 +134,38 @@ describe('syncProject', () => {
             expect(state[counterKey]).toBe(2);
         } finally {
             delete state[counterKey];
+        }
+    });
+
+    it('repeats extraction warnings when the cached metadata is reused', async () => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const outDir = join(tmp, '.giri');
+        await mkdir(routesDir, { recursive: true });
+        await writeFile(
+            join(routesDir, '+get.ts'),
+            [
+                'import { defineInputSchema } from "../../../../../src/validation";',
+                'export const query = defineInputSchema({',
+                '    validate: (value) => ({ ok: true, value }),',
+                '    toJsonSchema: () => { throw new Error("not representable"); },',
+                '});',
+                'export const handle = () => new Response();',
+            ].join('\n'),
+        );
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            const expected = expect.stringMatching(/\+get\.ts query: skipped a request schema .*not representable/);
+
+            const initial = await syncProject({ outDir }, { cwd: tmp });
+            expect(initial.cacheHit).toBe(false);
+            expect(warn).toHaveBeenCalledWith(expected);
+
+            warn.mockClear();
+            const cached = await syncProject({ outDir }, { cwd: tmp });
+            expect(cached.cacheHit).toBe(true);
+            expect(warn).toHaveBeenCalledWith(expected);
+        } finally {
+            warn.mockRestore();
         }
     });
 

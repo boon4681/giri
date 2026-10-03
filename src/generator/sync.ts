@@ -58,6 +58,16 @@ export interface SyncData {
     securityByFile: Map<string, RouteSecurity>;
     hiddenFiles: Set<string>;
     openapiByFile: Map<string, RouteOpenApiMeta>;
+    /** Extraction warnings per route, cached so a sync that skips extraction still reports them. */
+    warningsByFile: Map<string, string[]>;
+}
+
+function reportWarnings(data: SyncData): void {
+    for (const warnings of data.warningsByFile.values()) {
+        for (const warning of warnings) {
+            console.warn(warning);
+        }
+    }
 }
 
 export interface SyncResult {
@@ -104,6 +114,7 @@ interface RuntimeMeta {
     securityByFile: Map<string, RouteSecurity>;
     hiddenFiles: Set<string>;
     openapiByFile: Map<string, RouteOpenApiMeta>;
+    warningsByFile: Map<string, string[]>;
 }
 
 /** Load route modules once to derive input schemas, middleware security, and openapi metadata. */
@@ -117,8 +128,9 @@ async function extractMeta(
     const securityByFile = new Map<string, RouteSecurity>();
     const hiddenFiles = new Set<string>();
     const openapiByFile = new Map<string, RouteOpenApiMeta>();
+    const warningsByFile = new Map<string, string[]>();
     if (routes.length === 0) {
-        return { responsesByFile, inputsByFile, securityByFile, hiddenFiles, openapiByFile };
+        return { responsesByFile, inputsByFile, securityByFile, hiddenFiles, openapiByFile, warningsByFile };
     }
 
     try {
@@ -140,6 +152,9 @@ async function extractMeta(
             if (entry.openapi) {
                 openapiByFile.set(file, entry.openapi);
             }
+            if (entry.warnings) {
+                warningsByFile.set(file, entry.warnings);
+            }
         }
     } catch (error) {
         // A validator owner conflict is an actionable config error - fail loudly rather than
@@ -150,7 +165,7 @@ async function extractMeta(
         console.warn(`giri: skipped route metadata generation (${(error as Error).message}).`);
     }
 
-    return { responsesByFile, inputsByFile, securityByFile, hiddenFiles, openapiByFile };
+    return { responsesByFile, inputsByFile, securityByFile, hiddenFiles, openapiByFile, warningsByFile };
 }
 
 /**
@@ -186,6 +201,7 @@ export async function syncProject<App>(
         ...folders.map((folder) => typeFilePath(paths, folder.dir)),
     ];
     if (cached && generatedFiles.every(existsSync)) {
+        reportWarnings(cached);
         return { paths, routes, folders, data: cached, cacheHit: true };
     }
 
@@ -229,6 +245,7 @@ export async function syncProject<App>(
                 data.securityByFile.delete(route.file);
                 data.hiddenFiles.delete(route.file);
                 data.openapiByFile.delete(route.file);
+                data.warningsByFile.delete(route.file);
             }
             const responses = await extractResponses(paths, affected);
             const meta = await extractMeta(config, paths, affected);
@@ -243,6 +260,8 @@ export async function syncProject<App>(
                 if (meta.hiddenFiles.has(file)) data.hiddenFiles.add(file);
                 const openapi = meta.openapiByFile.get(file);
                 if (openapi) data.openapiByFile.set(file, openapi);
+                const warnings = meta.warningsByFile.get(file);
+                if (warnings) data.warningsByFile.set(file, warnings);
             }
         }
     }
@@ -254,6 +273,7 @@ export async function syncProject<App>(
         }
         data = { ...meta, responsesByFile };
     }
+    reportWarnings(data);
     await writeManifest(paths, routes, data);
     await writeOpenApi(paths, routes, data);
     await writeSyncCache(paths, snapshot.fingerprint, data, snapshot.files, routes);

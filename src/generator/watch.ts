@@ -50,6 +50,7 @@ export function createWatchUpdater(
         data.securityByFile = result.data.securityByFile;
         data.hiddenFiles = result.data.hiddenFiles;
         data.openapiByFile = result.data.openapiByFile;
+        data.warningsByFile = result.data.warningsByFile;
         purgeGeneratedModules(paths.outDir);
         return 'full';
     };
@@ -91,6 +92,7 @@ export function createWatchUpdater(
                 data.securityByFile.delete(key);
                 data.hiddenFiles.delete(key);
                 data.openapiByFile.delete(key);
+                data.warningsByFile.delete(key);
                 if (entry?.input) {
                     data.inputsByFile.set(key, entry.input);
                 }
@@ -102,6 +104,12 @@ export function createWatchUpdater(
                 }
                 if (entry?.openapi) {
                     data.openapiByFile.set(key, entry.openapi);
+                }
+                if (entry?.warnings) {
+                    data.warningsByFile.set(key, entry.warnings);
+                    for (const warning of entry.warnings) {
+                        console.warn(warning);
+                    }
                 }
             }
         } catch {

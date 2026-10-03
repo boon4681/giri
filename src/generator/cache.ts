@@ -8,7 +8,7 @@ import type { GiriConfig, GiriPaths } from '../types';
 import type { SyncData } from './sync';
 import { slash, writeJson } from './util';
 
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 export const SYNC_CACHE_NAME = '.sync-cache.json';
 
 interface FileStamp {
@@ -36,6 +36,7 @@ interface SyncCache {
         securityByFile: [string, unknown][];
         hiddenFiles: string[];
         openapiByFile: [string, unknown][];
+        warningsByFile: [string, string[]][];
     };
 }
 
@@ -143,6 +144,7 @@ function deserializeData(paths: GiriPaths, data: SyncCache['data']): SyncData {
         securityByFile: deserializeMap(paths, data.securityByFile),
         hiddenFiles: new Set(data.hiddenFiles.map((entry) => deserializePath(paths, entry))),
         openapiByFile: deserializeMap(paths, data.openapiByFile),
+        warningsByFile: deserializeMap(paths, data.warningsByFile),
     } as SyncData;
 }
 
@@ -186,6 +188,7 @@ export async function writeSyncCache(
             securityByFile: serializeMap(paths, data.securityByFile),
             hiddenFiles: [...data.hiddenFiles].map((file) => serializePath(paths, file)),
             openapiByFile: serializeMap(paths, data.openapiByFile),
+            warningsByFile: serializeMap(paths, data.warningsByFile),
         },
     };
     await writeJson(cachePath(paths), cache);
