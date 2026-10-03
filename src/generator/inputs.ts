@@ -18,7 +18,7 @@ function sanitize(schema: JSONSchema): JSONSchema {
 /**
  * Convert a declared input to JSON Schema by asking the wrapper.
  */
-export function inputToJsonSchema(schema: unknown): JSONSchema | undefined {
+export function inputToJsonSchema(schema: unknown, source?: string): JSONSchema | undefined {
     if (!isGiriInputSchema(schema)) {
         return undefined;
     }
@@ -27,7 +27,8 @@ export function inputToJsonSchema(schema: unknown): JSONSchema | undefined {
     } catch (error) {
         // A schema that can't be rendered to JSON Schema only costs its own request
         // documentation - it must not discard the route's other metadata (tags/security).
-        console.warn(`giri: skipped a request schema that can't be represented as JSON Schema (${(error as Error).message}).`);
+        const where = source ? `${source}: ` : '';
+        console.warn(`giri: ${where}skipped a request schema that can't be represented as JSON Schema (${(error as Error).message}).`);
         return undefined;
     }
 }
@@ -38,13 +39,14 @@ export function inputToJsonSchema(schema: unknown): JSONSchema | undefined {
  */
 export function bodyToJsonSchemas(
     value: unknown,
+    source?: string,
 ): Partial<Record<BodyContentType, JSONSchema>> | undefined {
     if (!isGiriBodySchema(value)) {
         return undefined;
     }
     const out: Partial<Record<BodyContentType, JSONSchema>> = {};
     for (const [contentType, schema] of Object.entries(value.contents)) {
-        const json = inputToJsonSchema(schema);
+        const json = inputToJsonSchema(schema, source && `${source} body.${contentType}`);
         if (json) {
             out[contentType as BodyContentType] = json;
         }
@@ -80,12 +82,15 @@ function mergeObjectJsonSchemas(schemas: JSONSchema[]): JSONSchema {
 }
 
 /** Merge every query owner's schema into the single JSON Schema OpenAPI documents. */
-export function queryToJsonSchema(schemas: readonly GiriInputSchema[] | undefined): JSONSchema | undefined {
+export function queryToJsonSchema(
+    schemas: readonly GiriInputSchema[] | undefined,
+    source?: string,
+): JSONSchema | undefined {
     if (!schemas || schemas.length === 0) {
         return undefined;
     }
     const jsons = schemas
-        .map((schema) => inputToJsonSchema(schema))
+        .map((schema) => inputToJsonSchema(schema, source && `${source} query`))
         .filter((json): json is JSONSchema => json !== undefined);
     if (jsons.length === 0) {
         return undefined;
@@ -96,13 +101,14 @@ export function queryToJsonSchema(schemas: readonly GiriInputSchema[] | undefine
 /** Merge every body owner's schemas into one JSON Schema per content-type. */
 export function bodiesToJsonSchemas(
     schemas: readonly GiriBodySchema[] | undefined,
+    source?: string,
 ): Partial<Record<BodyContentType, JSONSchema>> | undefined {
     if (!schemas || schemas.length === 0) {
         return undefined;
     }
     const perType = new Map<BodyContentType, JSONSchema[]>();
     for (const schema of schemas) {
-        const single = bodyToJsonSchemas(schema);
+        const single = bodyToJsonSchemas(schema, source);
         if (!single) {
             continue;
         }

@@ -35,6 +35,10 @@ describe('inputToJsonSchema', () => {
         });
         expect(() => inputToJsonSchema(body)).not.toThrow();
         expect(inputToJsonSchema(body)).toBeUndefined();
+        inputToJsonSchema(body, 'src/routes/api/user/+post.ts body.json');
+        expect(warn).toHaveBeenLastCalledWith(
+            expect.stringContaining('giri: src/routes/api/user/+post.ts body.json: skipped'),
+        );
         warn.mockRestore();
     });
 });

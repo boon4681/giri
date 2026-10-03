@@ -93,8 +93,8 @@ function readInput(
         { label, body: routeModule.body, query: routeModule.query },
     ]);
     const input: RouteInputSchemas = {};
-    const body = bodiesToJsonSchemas(resolved?.body);
-    const query = queryToJsonSchema(resolved?.query);
+    const body = bodiesToJsonSchemas(resolved?.body, label);
+    const query = queryToJsonSchema(resolved?.query, label);
     if (body) {
         input.body = body;
     }
