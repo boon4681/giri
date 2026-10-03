@@ -1,0 +1,1 @@
+- Warning about a request schema that cannot be turned into JSON Schema now tells you which route file and which part (body or query) it came from.
