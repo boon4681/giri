@@ -1,0 +1,1 @@
+- Fixed `giri build` failing with "Cannot read file" when a route imports through a path alias without a file extension.
