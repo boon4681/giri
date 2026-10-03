@@ -1,0 +1,1 @@
+- Fixed the warning about a request schema that cannot be turned into JSON Schema only showing on the first `giri build` or `giri sync`, it now shows on every run until the schema is fixed.
