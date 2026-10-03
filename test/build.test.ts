@@ -155,6 +155,30 @@ describe('giri build', () => {
         }
     });
 
+    it('reports type errors without failing the build', async () => {
+        await writeFile(join(tmp, 'tsconfig.json'), JSON.stringify({
+            compilerOptions: { strict: true, skipLibCheck: true, noEmit: true },
+            files: ['src/bad.ts'],
+        }));
+        await writeFile(join(tmp, 'src', 'bad.ts'), 'export const count: number = "one";');
+        const config = defineConfig({
+            adapter: hono(),
+            outDir: join(tmp, '.giri'),
+            alias: { $db: './src/db.ts' },
+        });
+        const options = { cwd: tmp, outDir: join(tmp, 'dist'), sync: false };
+
+        const onTypeErrors = vi.fn<(errors: string[]) => void>();
+        const checked = await buildProject(config, { ...options, onTypeErrors });
+        expect(checked.routeCount).toBe(1);
+        expect(onTypeErrors).toHaveBeenCalledTimes(1);
+        expect(onTypeErrors.mock.calls[0][0]).toHaveLength(1);
+        expect(onTypeErrors.mock.calls[0][0][0]).toMatch(/src\/bad\.ts:1:14 - error TS2322: /);
+
+        await buildProject(config, { ...options, onTypeErrors, typecheck: false });
+        expect(onTypeErrors).toHaveBeenCalledTimes(1);
+    });
+
     it('bundles routes, aliases, lifecycle, and $giri assets into runnable JS', async () => {
         const result = await buildProject(defineConfig({
             adapter: hono(),

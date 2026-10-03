@@ -280,7 +280,7 @@ handler as a typed `c.app`, inferred from `init`'s return - no declaration neede
 giri init [--adapter hono] [--pm npm|yarn|pnpm|bun] [--install|--no-install] [-y]
 giri sync [--no-watch]
 giri serve [--port 3000] [--host 127.0.0.1] [--no-watch]
-giri build [--out dist] [--minify] [--include-deps] [--format esm|cjs]
+giri build [--out dist] [--minify] [--include-deps] [--format esm|cjs] [--no-typecheck]
 ```
 
 | Command      | What it does                                                                                  |
@@ -288,7 +288,7 @@ giri build [--out dist] [--minify] [--include-deps] [--format esm|cjs]
 | `giri init`  | Scaffold a Giri project and optionally install its adapter, validator, and TypeScript tooling. |
 | `giri sync [--no-watch]` | Scan `src/routes` and regenerate `.giri/` once. `--no-watch` explicitly guarantees one-shot operation for scripts. |
 | `giri serve` | Sync, run the lifecycle `init()`, start the adapter server, and watch source files.            |
-| `giri build` | Sync, then bundle routes, config, lifecycle, and aliases into a runnable `dist/index.js`.     |
+| `giri build` | Sync, then bundle routes, config, lifecycle, and aliases into a runnable `dist/index.js`. Type errors are shown as warnings. |
 
 Run `giri init` inside a project that already has a `package.json`. It creates
 `giri.config.ts`, `src/routes/+get.ts`, `tsconfig.json`, and `.gitignore` when they do not
@@ -320,6 +320,7 @@ already exist. Dependency installation includes the supported TypeScript 5.9 rel
 | `--minify`                | Minify the bundle.                                                          |
 | `--include-deps`          | Bundle `node_modules` dependencies too, so the output runs without them.    |
 | `--format esm\|cjs`       | Output module format. Defaults to the nearest `package.json` `type`.        |
+| `--no-typecheck`          | Skip the TypeScript check that reports type errors as warnings.             |
 
 Without `--format`, the bundle is ESM when the nearest `package.json` has `"type": "module"`,
 otherwise CommonJS. A format that differs from the package type is written as `index.mjs` or

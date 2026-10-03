@@ -62,7 +62,7 @@ Usage:
   giri init [--adapter hono] [--pm npm|yarn|pnpm|bun] [--no-install] [-y]
   giri sync [--no-watch]
   giri serve [--port 3000] [--host 127.0.0.1] [--no-watch]
-  giri build [--out dist] [--minify] [--include-deps] [--format esm|cjs]
+  giri build [--out dist] [--minify] [--include-deps] [--format esm|cjs] [--no-typecheck]
 `);
 }
 
@@ -118,10 +118,11 @@ interface BuildFlags {
     minify: boolean;
     includeDeps: boolean;
     format?: 'esm' | 'cjs';
+    typecheck: boolean;
 }
 
 function parseBuildFlags(args: string[]): BuildFlags {
-    const flags: BuildFlags = { minify: false, includeDeps: false };
+    const flags: BuildFlags = { minify: false, includeDeps: false, typecheck: true };
 
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index];
@@ -135,6 +136,8 @@ function parseBuildFlags(args: string[]): BuildFlags {
             flags.minify = true;
         } else if (arg === '--include-deps') {
             flags.includeDeps = true;
+        } else if (arg === '--no-typecheck') {
+            flags.typecheck = false;
         } else if (arg === '--format') {
             const value = args[++index];
             if (value !== 'esm' && value !== 'cjs') {
@@ -630,6 +633,12 @@ async function main(): Promise<void> {
             minify: flags.minify,
             includeDeps: flags.includeDeps,
             format: flags.format,
+            typecheck: flags.typecheck,
+            onTypeErrors: (errors) => {
+                for (const error of errors) {
+                    log.warn(error, 'build');
+                }
+            },
         });
         const shown = relative(cwd, result.outFile);
         log.success(

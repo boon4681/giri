@@ -7,6 +7,7 @@ import { findConfigPath } from '../loader/loader';
 import { scanRoutes, type ScannedRoute } from '../routes';
 import type { GiriConfig } from '../types';
 import { syncProject } from './sync';
+import { typecheckProject } from './typecheck';
 import { slash } from './util';
 
 const GIRI_PACKAGE = '@boon4681/giri';
@@ -22,6 +23,10 @@ export interface BuildProjectOptions {
     format?: 'esm' | 'cjs';
     /** Regenerate `.giri/` before bundling. Defaults to true. */
     sync?: boolean;
+    /** Type-check with the project's `tsconfig.json`. Errors are reported, not fatal. Defaults to true. */
+    typecheck?: boolean;
+    /** Called before bundling with one `file:line:col - error TSxxxx: message` line per type error. */
+    onTypeErrors?: (errors: string[]) => void;
 }
 
 export interface BuildProjectResult {
@@ -300,6 +305,12 @@ export async function buildProject(
     const routes = options.sync === false
         ? await scanRoutes(paths.routesDir)
         : (await syncProject(config, { cwd })).routes;
+    if (options.typecheck !== false) {
+        const typeErrors = typecheckProject(cwd);
+        if (typeErrors.length > 0) {
+            options.onTypeErrors?.(typeErrors);
+        }
+    }
     const packageFormat = await outputFormat(cwd);
     const format = options.format ?? packageFormat;
     // Node picks the module system from package.json for `.js`, so a mismatched format needs its own extension.
