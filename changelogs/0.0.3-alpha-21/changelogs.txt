@@ -1,0 +1,1 @@
+- `giri serve` and the built server now read the `PORT` and `HOST` environment variables when no `--port` or `--host` flag is given, and they take priority over `server` in `giri.config.ts`.
