@@ -433,8 +433,9 @@ async function serveProject(config: GiriConfig, flags: ParsedFlags): Promise<voi
             validateRoutes: false,
         });
 
-        const port = flags.port ?? cfg.server?.port ?? 3000;
-        const hostname = flags.hostname ?? cfg.server?.hostname;
+        const envPort = process.env.PORT ? Number(process.env.PORT) : undefined;
+        const port = flags.port ?? envPort ?? cfg.server?.port ?? 3000;
+        const hostname = flags.hostname ?? (process.env.HOST || cfg.server?.hostname);
 
         if (flags.watch) {
             // Watch the whole `src/`, not just `src/routes`: a route's imports (auth.ts, db.ts, …)
