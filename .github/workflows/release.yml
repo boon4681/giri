@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
@@ -16,6 +17,31 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Publish package to npm
+        env:
+          HUSKY: '0'
+          YARN_NODE_LINKER: node-modules
+        shell: bash
+        run: |
+          version="$(node scripts/changelog.ts tag)"
+          package="$(node -p 'require("./package.json").name')"
+          versions="$(npm view "$package" versions --json)"
+          if node -e '
+            const versions = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+            process.exit([versions].flat().includes(process.argv[1]) ? 0 : 1);
+          ' "$version" <<< "$versions"; then
+            echo "npm already has $package@$version."
+            exit 0
+          fi
+
+          source_dir="$RUNNER_TEMP/npm-source"
+          git worktree add --detach "$source_dir" "refs/tags/$version"
+          cd "$source_dir"
+          corepack yarn install --immutable
+          corepack yarn build
+          npm publish --access public --tag latest
       - name: Publish tagged changelog
         env:
           GH_TOKEN: ${{ github.token }}
@@ -33,4 +59,8 @@ jobs:
           fi
 
           git push origin "$tag"
+          if gh release view "$version" >/dev/null 2>&1; then
+            echo "GitHub release $version already exists."
+            exit 0
+          fi
           gh release create "$version" --verify-tag --title "giri-$version" --notes-file "$notes" --latest
