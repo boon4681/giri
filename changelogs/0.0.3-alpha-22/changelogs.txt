@@ -1,0 +1,7 @@
+# One change per line, prefixed with "-". Lines starting with "#" are ignored.
+# Entries are markdown: **bold**, [link](url), image ![alt](./file.png), video ![alt](./clip.mp4).
+# Put media files next to this file; ./name resolves to this folder and moves with it on publish.
+# A line without a "-" continues the entry above it, e.g. a media line under its entry.
+# Publish with: yarn changelog publish <version>
+- Fixed generated app and route types falling back to `any` in NodeNext projects, and fixed type imports from CommonJS declarations to ES modules under Node16 and Node18.
+- You can now run `giri static` to generate TypeScript route entries with shared middleware for use with the portable runtime.
