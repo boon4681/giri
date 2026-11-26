@@ -8,7 +8,7 @@ import type { GiriConfig, GiriPaths } from '../types';
 import type { SyncData } from './sync';
 import { slash, writeJson } from './util';
 
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 5;
 export const SYNC_CACHE_NAME = '.sync-cache.json';
 
 interface FileStamp {

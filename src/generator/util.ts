@@ -9,14 +9,6 @@ export function slash(path: string): string {
     return path.split(sep).join('/');
 }
 
-export function importPath(fromFile: string, toFile: string): string {
-    let path = slash(relative(dirname(fromFile), toFile)).replace(/\.d\.ts$/, '');
-    if (!path.startsWith('.')) {
-        path = `./${path}`;
-    }
-    return path;
-}
-
 export function relativeConfigPath(fromDir: string, toPath: string): string {
     let path = slash(relative(fromDir, toPath));
     if (!path.startsWith('.')) {
@@ -25,13 +17,13 @@ export function relativeConfigPath(fromDir: string, toPath: string): string {
     return path;
 }
 
-/** A relative ESM module specifier from `fromDir` to a source file (extension stripped). */
-export function moduleSpecifier(fromDir: string, target: string): string {
-    let path = slash(relative(fromDir, target)).replace(/\.(?:[cm]?[jt]sx?)$/, '');
-    if (!path.startsWith('.')) {
-        path = `./${path}`;
-    }
-    return path;
+/** Use JavaScript extensions and allow CommonJS declarations to reference ESM types. */
+export function typeImport(fromDir: string, target: string): string {
+    const specifier = relativeConfigPath(fromDir, target)
+        .replace(/(?:\.d)?\.tsx?$/, '.js')
+        .replace(/(?:\.d)?\.mts$/, '.mjs')
+        .replace(/(?:\.d)?\.cts$/, '.cjs');
+    return `import(${JSON.stringify(specifier)}, { with: { "resolution-mode": "import" } })`;
 }
 
 export function typeFilePath(paths: GiriPaths, routeDir: string): string {

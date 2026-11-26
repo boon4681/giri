@@ -113,7 +113,7 @@ describe('syncProject', () => {
             expect(initial.cacheHit).toBe(false);
             expect(state[counterKey]).toBe(1);
             await expect(readFile(join(outDir, '.sync-cache.json'), 'utf8')).resolves.toContain(
-                '"version": 4',
+                '"version": 5',
             );
 
             const cached = await syncProject({ outDir }, { cwd: tmp });
@@ -200,6 +200,58 @@ describe('syncProject', () => {
         });
         const diagnostics = ts.getPreEmitDiagnostics(program);
         expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
+    });
+
+    it.each([
+        { type: 'module', module: ts.ModuleKind.NodeNext },
+        { type: 'commonjs', module: ts.ModuleKind.Node16 },
+    ])('preserves app and route types in a $type project', async ({ type, module }) => {
+        const routesDir = join(tmp, 'src', 'routes');
+        const outDir = join(tmp, '.giri');
+        const routeFile = join(routesDir, '[id]', '+get.ts');
+        await mkdir(join(routesDir, '[id]'), { recursive: true });
+        await writeFile(join(tmp, 'package.json'), JSON.stringify({ type }));
+        await writeFile(join(tmp, 'src', 'main.mts'), 'export const init = () => ({ count: 1 });');
+        await writeFile(join(routesDir, '+shared.cts'), [
+            'import type { Middleware } from "./$types.js";',
+            'export const middleware: Middleware<{ user: string }> = async (c, next) => {',
+            '  c.set("user", "ada");',
+            '  await next();',
+            '};',
+        ].join('\n'));
+        await writeFile(routeFile, [
+            'import type { GET } from "./$types.js";',
+            'export const handle: GET = (c) => {',
+            '  // @ts-expect-error only registered app services are available',
+            '  c.app.missing;',
+            '  // @ts-expect-error user is a string inherited from the parent middleware',
+            '  c.get("user").toFixed();',
+            '  return c.json({ count: c.app.count.toFixed(), user: c.get("user").toUpperCase() });',
+            '};',
+            '// @ts-expect-error GET requires a handler response',
+            'const invalid: GET = () => 123;',
+        ].join('\n'));
+        await syncProject({ outDir }, { cwd: tmp });
+
+        const declarations = [
+            join(outDir, 'types', 'app.d.ts'),
+            join(outDir, 'types', 'src', 'routes', '$types.d.ts'),
+            join(outDir, 'types', 'src', 'routes', '[id]', '$types.d.ts'),
+            join(outDir, 'routes.d.ts'),
+        ];
+        const program = ts.createProgram([routeFile, ...declarations], {
+            target: ts.ScriptTarget.ES2022,
+            module,
+            strict: true,
+            rootDirs: [routesDir, join(outDir, 'types', 'src', 'routes')],
+            paths: { '@boon4681/giri': ['./src/index.ts'] },
+            types: ['node'],
+        });
+        const diagnostics = [routeFile, ...declarations].flatMap((file) =>
+            program.getSemanticDiagnostics(program.getSourceFile(file)!),
+        );
+        expect(diagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([]);
+        await expect(readFile(join(outDir, 'routes.d.ts'), 'utf8')).resolves.toContain('/$types.js');
     });
 
     it('infers a method handle response contract from the route responses export', async () => {

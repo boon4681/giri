@@ -1,7 +1,7 @@
 import { dirname } from 'node:path';
 import type { RouteParam } from '../routes';
 import type { GiriPaths, HttpMethod } from '../types';
-import { GENERATED_HEADER, importPath, moduleSpecifier, typeFilePath, writeGenerated } from './util';
+import { GENERATED_HEADER, typeFilePath, typeImport, writeGenerated } from './util';
 
 export interface TypeFolder {
     dir: string;
@@ -30,13 +30,13 @@ function paramsType(params: RouteParam[]): string {
 
 /** Merge the injected vars of the folder's `+shared.ts` middleware chain */
 function middlewareVarsType(typesDir: string, sharedFile: string): string {
-    const spec = JSON.stringify(moduleSpecifier(typesDir, sharedFile));
-    return `(typeof import(${spec}) extends { middleware: infer M } ? import("@boon4681/giri").InferStackVars<M> : {})`;
+    const shared = typeImport(typesDir, sharedFile);
+    return `(typeof ${shared} extends { middleware: infer M } ? import("@boon4681/giri").InferStackVars<M> : {})`;
 }
 
 function middlewareInputType(typesDir: string, sharedFile: string): string {
-    const spec = JSON.stringify(moduleSpecifier(typesDir, sharedFile));
-    return `(typeof import(${spec}) extends { middleware: infer M } ? import("@boon4681/giri").InferStackInput<M> : {})`;
+    const shared = typeImport(typesDir, sharedFile);
+    return `(typeof ${shared} extends { middleware: infer M } ? import("@boon4681/giri").InferStackInput<M> : {})`;
 }
 
 function ownSharedFile(dir: string, sharedFiles: string[]): string | undefined {
@@ -52,7 +52,7 @@ function varsType(paths: GiriPaths, file: string, dir: string, sharedFiles: stri
     const typesDir = dirname(file);
     const parts: string[] = [];
     if (dir !== paths.routesDir) {
-        parts.push(`import(${JSON.stringify(importPath(file, typeFilePath(paths, dirname(dir))))}).Vars`);
+        parts.push(`${typeImport(typesDir, typeFilePath(paths, dirname(dir)))}.Vars`);
     }
 
     const ownShared = ownSharedFile(dir, sharedFiles);
@@ -67,7 +67,7 @@ function inputType(paths: GiriPaths, file: string, dir: string, sharedFiles: str
     const typesDir = dirname(file);
     const parts: string[] = [];
     if (dir !== paths.routesDir) {
-        parts.push(`import(${JSON.stringify(importPath(file, typeFilePath(paths, dirname(dir))))}).Input`);
+        parts.push(`${typeImport(typesDir, typeFilePath(paths, dirname(dir)))}.Input`);
     }
 
     const ownShared = ownSharedFile(dir, sharedFiles);
@@ -80,14 +80,14 @@ function inputType(paths: GiriPaths, file: string, dir: string, sharedFiles: str
 
 function methodExports(typesDir: string, verbs: TypeFolder['verbs']): string[] {
     return verbs.map(({ method, file }) => {
-        const spec = JSON.stringify(moduleSpecifier(typesDir, file));
+        const route = `typeof ${typeImport(typesDir, file)}`;
         const input = [
             'Input',
-            `import("@boon4681/giri").RouteInputOf<typeof import(${spec})>`,
-            `import("@boon4681/giri").MiddlewareInputOf<typeof import(${spec})>`,
+            `import("@boon4681/giri").RouteInputOf<${route}>`,
+            `import("@boon4681/giri").MiddlewareInputOf<${route}>`,
         ].join(' & ');
-        const vars = `Vars & import("@boon4681/giri").MiddlewareVarsOf<typeof import(${spec})>`;
-        const output = `import("@boon4681/giri").RouteResponseOf<typeof import(${spec})>`;
+        const vars = `Vars & import("@boon4681/giri").MiddlewareVarsOf<${route}>`;
+        const output = `import("@boon4681/giri").RouteResponseOf<${route}>`;
         return `export type ${method} = import("@boon4681/giri").Handle<Params, ${input}, ${vars}, ${output}>;`;
     });
 }
