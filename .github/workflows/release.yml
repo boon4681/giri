@@ -1,0 +1,36 @@
+name: Create GitHub release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Publish tagged changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version="$(node scripts/changelog.ts tag)"
+          tag="refs/tags/$version"
+          notes="$RUNNER_TEMP/release-notes.md"
+          git show "$tag:changelogs/$version/changelogs.txt" | sed '/^[[:space:]]*#/d' > "$notes"
+
+          previous="$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' --exclude="$version" "$tag" 2>/dev/null || true)"
+          if [[ -n "$previous" ]]; then
+            printf '\n**Full Changelog** [%s...%s](%s/%s/compare/%s...%s)\n' \
+              "$previous" "$version" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$previous" "$version" >> "$notes"
+          fi
+
+          git push origin "$tag"
+          gh release create "$version" --verify-tag --title "giri-$version" --notes-file "$notes" --latest

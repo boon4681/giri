@@ -1,7 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
-import semver from "semver";
 
 const root = join(import.meta.dirname, "..");
 const draftDir = join(root, "changelogs", "draft");
@@ -47,11 +47,14 @@ function draft() {
     console.log(`Created ${draftFile}`);
 }
 
-function publish(version: string | undefined) {
-    if (!version || !semver.valid(version)) {
+async function publish(input: string | undefined) {
+    const { default: semver } = await import("semver");
+    const parsed = input && semver.parse(input);
+    if (!parsed) {
         fail("Usage: changelog publish <version>  (version must be valid semver, e.g. 0.0.2)");
-        return
+        return;
     }
+    const version = parsed.build.length ? `${parsed.version}+${parsed.build.join(".")}` : parsed.version;
     if (!existsSync(draftFile)) {
         fail(`No draft found at ${draftFile}. Run "yarn changelog draft" first.`);
     }
@@ -81,7 +84,37 @@ function publish(version: string | undefined) {
     console.log(`package.json version -> ${version}`);
 }
 
+function git(...args: string[]) {
+    return execFileSync("git", args, { cwd: root, encoding: "utf8" });
+}
+
+function committedVersion(ref: string): string {
+    return JSON.parse(git("show", `${ref}:package.json`)).version;
+}
+
+function tag() {
+    const version = committedVersion("HEAD");
+    if (typeof version !== "string" || !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/.test(version)) {
+        fail("Expected a bare version such as 0.0.3-alpha-17 in the committed package.json.");
+    }
+
+    const existing = git("tag", "--list", version).trim();
+    const ref = existing ? `refs/tags/${version}` : "HEAD";
+    if (existing && committedVersion(ref) !== version) {
+        fail(`Tag ${version} already points to a commit with a different package version.`);
+    }
+
+    const changelog = `changelogs/${version}/changelogs.txt`;
+    if (!parseEntries(git("show", `${ref}:${changelog}`)).length) {
+        fail(`No changelog entries in ${ref}:${changelog}.`);
+    }
+
+    if (!existing) git("tag", version, "HEAD");
+    console.log(version);
+}
+
 const [command, argument] = process.argv.slice(2);
 if (command === "draft") draft();
-else if (command === "publish") publish(argument);
-else fail("Usage: changelog <draft | publish <version>>");
+else if (command === "publish") publish(argument).catch((error: Error) => fail(error.message));
+else if (command === "tag") tag();
+else fail("Usage: changelog <draft | publish <version> | tag>");
