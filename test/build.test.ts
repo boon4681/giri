@@ -1,10 +1,12 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defineConfig } from '../src';
 import { hono } from '../src/adapters/hono';
 import { buildProject } from '../src/generator/build';
+import { syncProject } from '../src/generator/sync';
+import { createApp } from '../src/runtime';
 
 const tmp = join(process.cwd(), 'test', '.tmp', 'build');
 
@@ -113,6 +115,30 @@ describe('giri build', () => {
 
     afterEach(async () => {
         await rm(tmp, { recursive: true, force: true });
+    });
+
+    it.each([
+        { args: [], folder: '.generated/giri' },
+        { args: ['--out', 'src/generated'], folder: 'src/generated' },
+    ])('generates importable static route entries in $folder', async ({ args, folder }) => {
+        const outDir = '.generated/giri';
+        await writeFile(join(tmp, 'giri.config.ts'), `export default { adapter: {}, outDir: ${JSON.stringify(outDir)} };`);
+        await writeFile(
+            join(tmp, 'src', 'routes', 'users', '[id]', '+get.ts'),
+            'export const handle = (c) => c.json({ id: c.params.id, shared: c.get("shared") });',
+        );
+        await writeFile(join(tmp, 'src', 'routes', 'users', '+get.ts'), 'export const handle = () => new Response();');
+
+        execFileSync(process.execPath, ['--import', 'tsx', join(process.cwd(), 'src', 'cli.ts'), 'static', ...args], { cwd: tmp });
+        await syncProject({ outDir }, { cwd: tmp });
+
+        const file = join(tmp, folder, 'route-entries.ts');
+        const contents = await readFile(file, 'utf8');
+        expect(contents.match(/\/\+shared\.ts/g)).toHaveLength(1);
+        const { routes } = await import(file);
+        const app = createApp({ adapter: hono(), routes });
+        const response = await app.fetch(new Request('http://localhost/users/42'));
+        expect(await response.json()).toEqual({ id: '42', shared: 'yes' });
     });
 
     it.each([

@@ -18,6 +18,7 @@ import { writeOpenApi } from './openapi';
 import { writeParamTypes, type TypeFolder } from './param-types';
 import { RouteResponseSchemaError } from './errors';
 import type { RouteOpenApiMeta, RouteSecurity } from './route-meta';
+import { ROUTE_ENTRIES_FILE } from './route-entries';
 import { writeRouteTypes } from './route-types';
 import type { RouteResponses } from './schema';
 import { writeTsConfig } from './tsconfig';
@@ -286,6 +287,7 @@ export async function syncProject<App>(
                 join(paths.outDir, 'manifest.json'),
                 join(paths.outDir, 'openapi.json'),
                 join(paths.outDir, 'routes.d.ts'),
+                join(paths.outDir, ROUTE_ENTRIES_FILE),
                 join(paths.outDir, SYNC_CACHE_NAME),
                 join(paths.outDir, 'types', 'app.d.ts'),
                 ...folders.map((folder) => typeFilePath(paths, folder.dir)),

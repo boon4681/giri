@@ -279,6 +279,7 @@ handler as a typed `c.app`, inferred from `init`'s return - no declaration neede
 ```text
 giri init [--adapter hono] [--pm npm|yarn|pnpm|bun] [--install|--no-install] [-y]
 giri sync [--no-watch]
+giri static [--out <dir>]
 giri serve [--port 3000] [--host 127.0.0.1] [--no-watch]
 giri build [--out dist] [--minify] [--include-deps] [--format esm|cjs] [--no-typecheck]
 ```
@@ -287,6 +288,7 @@ giri build [--out dist] [--minify] [--include-deps] [--format esm|cjs] [--no-typ
 | ------------ | --------------------------------------------------------------------------------------------- |
 | `giri init`  | Scaffold a Giri project and optionally install its adapter, validator, and TypeScript tooling. |
 | `giri sync [--no-watch]` | Scan `src/routes` and regenerate `.giri/` once. `--no-watch` explicitly guarantees one-shot operation for scripts. |
+| `giri static` | Generate a TypeScript module with static route imports for the portable runtime. |
 | `giri serve` | Sync, run the lifecycle `init()`, start the adapter server, and watch source files.            |
 | `giri build` | Sync, then bundle routes, config, lifecycle, and aliases into a runnable `dist/index.js`. Type errors are shown as warnings. |
 
@@ -358,6 +360,23 @@ yarn dev
 ```
 
 ## Portable runtime
+
+Run `giri static` to generate `.giri/route-entries.ts` (or `route-entries.ts` under your
+configured `outDir`). To write it into a different folder, run `giri static --out src/generated`.
+Import its `routes` array into your own entry point:
+
+```ts
+import { createApp } from "@boon4681/giri/runtime";
+import { hono } from "@boon4681/giri/adapters/hono";
+import { routes } from "./.giri/route-entries.ts";
+
+export const app = createApp({ adapter: hono(), routes });
+```
+
+The module references your route source files by their original extensions. For a `tsc --noEmit`
+project, enable `allowImportingTsExtensions` if it is disabled. The caller supplies the adapter,
+services, and server lifecycle. Run `giri static` again after adding, moving, or removing route or
+shared middleware files.
 
 `@boon4681/giri/runtime` is the portable composition layer for generated integrations. It does
 not implement routing itself: it accepts a complete `GiriAdapter`, creates that adapter's app, and

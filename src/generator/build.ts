@@ -6,6 +6,7 @@ import { resolveAliasRequest, resolveGiriPaths } from '../app';
 import { findConfigPath } from '../loader/loader';
 import { scanRoutes, type ScannedRoute } from '../routes';
 import type { GiriConfig } from '../types';
+import { renderRouteEntries } from './route-entries';
 import { syncProject } from './sync';
 import { typecheckProject } from './typecheck';
 import { slash } from './util';
@@ -122,7 +123,6 @@ function giriSubpath(request: string): string | undefined {
 }
 
 function renderEntry(cwd: string, configFile: string, mainFile: string | undefined, routes: ScannedRoute[]): string {
-    const bindings = new Map<string, string>();
     const imports = [
         `import { createApp } from ${JSON.stringify(GIRI_PACKAGE + '/runtime')};`,
         `import config from ${JSON.stringify(specifier(cwd, configFile))};`,
@@ -133,26 +133,11 @@ function renderEntry(cwd: string, configFile: string, mainFile: string | undefin
         imports.push('const lifecyclePromise = Promise.resolve({});');
     }
 
-    const bind = (file: string): string => {
-        const existing = bindings.get(file);
-        if (existing) {
-            return existing;
-        }
-        const name = `mod${bindings.size}`;
-        bindings.set(file, name);
-        imports.push(`import * as ${name} from ${JSON.stringify(specifier(cwd, file))};`);
-        return name;
-    };
-
-    const descriptors = routes.map((route) => {
-        const shared = route.sharedFiles.map((file) => bind(file));
-        const moduleName = bind(route.file);
-        const sharedField = shared.length > 0 ? `, shared: [${shared.join(', ')}]` : '';
-        return `{ method: ${JSON.stringify(route.method)}, path: ${JSON.stringify(route.path)}, module: ${moduleName}${sharedField} }`;
-    });
+    const routeEntries = renderRouteEntries(routes, (file) => specifier(cwd, file));
 
     return [
         ...imports,
+        ...routeEntries.imports,
         '',
         'function flag(...names) {',
         '    const args = process.argv.slice(2);',
@@ -179,7 +164,7 @@ function renderEntry(cwd: string, configFile: string, mainFile: string | undefin
         '    const app = createApp({',
         '        adapter: config.adapter,',
         '        routes: [',
-        ...descriptors.map((descriptor) => `            ${descriptor},`),
+        ...routeEntries.entries.map((entry) => `            ${entry},`),
         '        ],',
         '        services,',
         '        cookieSecret: config.cookieSecret,',

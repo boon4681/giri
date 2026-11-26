@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import * as prompts from '@clack/prompts';
-import { buildGiriApp, registerAliasResolver } from './app';
+import { buildGiriApp, registerAliasResolver, resolveGiriPaths } from './app';
 import { findConfigPath, load, safeRegister } from './loader/loader';
 import { syncProject } from './generator/sync';
 import { loadLifecycle, runInit } from './lifecycle';
@@ -61,6 +61,7 @@ function help(): void {
 Usage:
   giri init [--adapter hono] [--pm npm|yarn|pnpm|bun] [--no-install] [-y]
   giri sync [--no-watch]
+  giri static [--out <dir>]
   giri serve [--port 3000] [--host 127.0.0.1] [--no-watch]
   giri build [--out dist] [--minify] [--include-deps] [--format esm|cjs] [--no-typecheck]
 `);
@@ -653,6 +654,18 @@ async function main(): Promise<void> {
     }
 
     const config = await load();
+
+    if (command === 'static') {
+        const [option, outDir, extra] = args;
+        if (option && option !== '--out') throw new Error(`Unknown static option: ${option}`);
+        if (option && (!outDir || outDir.startsWith('--'))) throw new Error('Missing value for --out');
+        if (extra) throw new Error(`Unknown static option: ${extra}`);
+        const { writeRouteEntries } = await import('./generator/route-entries.js');
+        const paths = resolveGiriPaths({ outDir: outDir ?? config.outDir }, cwd);
+        const { file, routeCount } = await writeRouteEntries(paths);
+        log.success(`generated ${routeCount} route entries ${muted(`at ${relative(cwd, file)}`)}`, 'static');
+        return;
+    }
 
     if (command === 'sync') {
         parseSyncFlags(args);
